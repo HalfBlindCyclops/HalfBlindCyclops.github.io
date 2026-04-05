@@ -23,9 +23,16 @@ jobs:
           node-version: "20"
           cache: npm
       - run: npm ci
-      - run: npm run build
-        env:
-          NEXT_PUBLIC_BASE_PATH: /${{ github.event.repository.name }}
+      # User/org Pages (`<user>.github.io`) is served at `/`, not `/repo-name/`.
+      # Project Pages (`/<repo>/`) needs NEXT_PUBLIC_BASE_PATH=/repo-name.
+      - name: Build static export
+        run: |
+          REPO_NAME="${{ github.event.repository.name }}"
+          if [[ "$REPO_NAME" == *.github.io ]]; then
+            npm run build
+          else
+            NEXT_PUBLIC_BASE_PATH="/$REPO_NAME" npm run build
+          fi
       - uses: actions/upload-pages-artifact@v3
         with:
           path: out
