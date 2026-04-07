@@ -221,7 +221,6 @@ export function GlobeExperience() {
     latitude: null,
     longitude: null,
   });
-  const [useNoTopoTexture, setUseNoTopoTexture] = useState(true);
   const prefersReducedMotion = useReducedMotion();
   const isMobile = useMobileLayout();
 
@@ -317,12 +316,6 @@ export function GlobeExperience() {
       ? [1, 1.2]
       : [1, 1.5];
 
-  const topoBtnStyle = {
-    borderColor: colorToRgba(ACCENT_COLOR_HEX, 0.45),
-    backgroundColor: colorToRgba(ACCENT_COLOR_HEX, 0.12),
-    color: "rgb(236, 254, 255)",
-  } as const;
-
   return (
     <section
       ref={sectionRef}
@@ -365,7 +358,6 @@ export function GlobeExperience() {
                 isMobile={isMobile}
                 reducedMotion={Boolean(prefersReducedMotion)}
                 sunDirection={SUN_DIRECTION}
-                useNoTopoTexture={useNoTopoTexture}
               />
               <GlobeWeather
                 isMobile={isMobile}
@@ -423,22 +415,6 @@ export function GlobeExperience() {
           ) : (
             <span className="text-slate-300">N/A</span>
           )}
-        </div>
-        <div className="max-w-full rounded-lg border border-amber-500/35 bg-slate-950/85 px-3 py-2 backdrop-blur-md">
-          <div className="mb-2 text-[10px] font-medium uppercase tracking-wide text-amber-200/80">
-            Dev tools
-          </div>
-          <div className="flex max-w-full flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setUseNoTopoTexture((v) => !v)}
-              className="shrink-0 rounded-lg border px-3 py-2 text-xs font-medium transition hover:brightness-110 md:text-sm"
-              style={topoBtnStyle}
-              title="Toggle terrain/topography in earth texture"
-            >
-              {useNoTopoTexture ? "No Topo" : "Topo"}
-            </button>
-          </div>
         </div>
       </div>
 

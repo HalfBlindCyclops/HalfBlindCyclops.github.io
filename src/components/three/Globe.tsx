@@ -6,40 +6,23 @@ import { useTexture } from "@react-three/drei";
 import { useThree } from "@react-three/fiber";
 import { publicPath } from "@/lib/basePath";
 
-const EARTH_TEXTURES = {
-  topo: {
-    low: publicPath("/bluemarble2k.jpg"),
-    high: publicPath("/bluemarble8k.jpg"),
-  },
-  noTopo: {
-    low: publicPath("/bluemarble2knotopo.jpg"),
-    high: publicPath("/bluemarble8knotopo.jpg"),
-  },
-  night: publicPath("/blackmarble2k.jpg"),
+/** Flat Blue Marble (no shaded relief) — only day variants referenced so topo assets are never fetched. */
+const EARTH_DAY_TEXTURES = {
+  low: publicPath("/bluemarble2knotopo.jpg"),
+  high: publicPath("/bluemarble8knotopo.jpg"),
 };
+const NIGHT_MAP = publicPath("/blackmarble2k.jpg");
 
 type GlobeProps = {
   isMobile: boolean;
   reducedMotion: boolean;
   sunDirection: [number, number, number];
-  useNoTopoTexture: boolean;
 };
 
-export function Globe({
-  isMobile,
-  reducedMotion,
-  sunDirection,
-  useNoTopoTexture,
-}: GlobeProps) {
+export function Globe({ isMobile, reducedMotion, sunDirection }: GlobeProps) {
   const gl = useThree((s) => s.gl);
-  const textureSet = useNoTopoTexture ? EARTH_TEXTURES.noTopo : EARTH_TEXTURES.topo;
-  const [dayMapPath, setDayMapPath] = useState(textureSet.low);
-  const nightMapPath = EARTH_TEXTURES.night;
-
-  useEffect(() => {
-    // On toggle change, immediately switch to low-res variant for quick feedback.
-    setDayMapPath(textureSet.low);
-  }, [textureSet.high, textureSet.low]);
+  const [dayMapPath, setDayMapPath] = useState(EARTH_DAY_TEXTURES.low);
+  const nightMapPath = NIGHT_MAP;
 
   useEffect(() => {
     // Avoid loading 8k textures on constrained devices to reduce VRAM spikes.
@@ -56,7 +39,7 @@ export function Globe({
       requestIdleCallback?: (cb: IdleRequestCallback, opts?: IdleRequestOptions) => number;
       cancelIdleCallback?: (id: number) => void;
     };
-    const scheduleUpgrade = () => setDayMapPath(textureSet.high);
+    const scheduleUpgrade = () => setDayMapPath(EARTH_DAY_TEXTURES.high);
     let timeoutId: ReturnType<typeof setTimeout> | null = null;
     let idleId: number | null = null;
 
@@ -73,7 +56,7 @@ export function Globe({
     return () => {
       if (timeoutId !== null) clearTimeout(timeoutId);
     };
-  }, [isMobile, reducedMotion, textureSet.high]);
+  }, [isMobile, reducedMotion]);
 
   const onTexturesLoaded = useCallback(
     (loaded: Texture[]) => {
