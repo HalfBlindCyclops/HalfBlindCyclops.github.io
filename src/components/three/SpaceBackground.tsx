@@ -1,22 +1,21 @@
 "use client";
 
-import { Suspense, useLayoutEffect, useMemo, useRef } from "react";
+import { useLayoutEffect, useMemo, useRef } from "react";
 import {
-  ACESFilmicToneMapping,
   AdditiveBlending,
   BackSide,
   CanvasTexture,
-  SRGBColorSpace,
   Sprite,
+  SRGBColorSpace,
   Vector3,
 } from "three";
-import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { AdaptiveDpr, Stars, useTexture } from "@react-three/drei";
+import { useFrame, useThree } from "@react-three/fiber";
+import { Stars, useTexture } from "@react-three/drei";
 import { INITIAL_GLOBE_FOCUS } from "@/data/resumeNodes";
 import { publicPath } from "@/lib/basePath";
 import { latLonToSceneWorld } from "@/lib/geo";
 
-/** Opaque black vs transparent clear so a behind layer (shared starfield) can show through. */
+/** Black clear; `opaque={false}` only if stacking under another GL/HTML layer. */
 function SceneClearTone({ opaque }: { opaque: boolean }) {
   const { gl } = useThree();
   useLayoutEffect(() => {
@@ -32,13 +31,11 @@ function SceneClearTone({ opaque }: { opaque: boolean }) {
 type SpaceBackgroundProps = {
   isMobile: boolean;
   sunDirection: [number, number, number];
-  /** When false, only scene lights (globe illumination). Pair with full-viewport `StarfieldBackdrop` + transparent canvas. */
   includeStars?: boolean;
-  /** When true, scene clears transparent so stars from a behind layer align across split layout. */
   transparentBackground?: boolean;
 };
 
-/** Drei star layers only — no lights. Use in a separate full-screen canvas so stars fill the viewport outside the globe column. */
+/** Drei star layers (shared camera with globe). */
 export function StarfieldLayers({ isMobile }: { isMobile: boolean }) {
   return (
     <>
@@ -64,11 +61,17 @@ export function StarfieldLayers({ isMobile }: { isMobile: boolean }) {
   );
 }
 
+/** Pitch sky texture (rad, +X axis) so the milky-way band sits lower when the camera looks down over Boston. */
+const SKY_BACKDROP_PITCH = -0.62;
+
 function SpacePhotoBackdrop({ opacity = 0.52 }: { opacity?: number }) {
   const texture = useTexture(publicPath("/space-background.webp"));
+  useLayoutEffect(() => {
+    texture.colorSpace = SRGBColorSpace;
+  }, [texture]);
   return (
-    <mesh renderOrder={-100}>
-      <sphereGeometry args={[480, 64, 64]} />
+    <mesh renderOrder={-1000} rotation={[SKY_BACKDROP_PITCH, Math.PI, 0]}>
+      <sphereGeometry args={[520, 64, 64]} />
       <meshBasicMaterial
         map={texture}
         side={BackSide}
@@ -76,6 +79,7 @@ function SpacePhotoBackdrop({ opacity = 0.52 }: { opacity?: number }) {
         opacity={opacity}
         toneMapped={false}
         depthWrite={false}
+        depthTest
       />
     </mesh>
   );
@@ -275,7 +279,7 @@ export function SpaceBackground({
   return (
     <>
       <SceneClearTone opaque={!transparentBackground} />
-      {!transparentBackground ? <SpacePhotoBackdrop opacity={0.58} /> : null}
+      {!transparentBackground ? <SpacePhotoBackdrop opacity={0.78} /> : null}
       <ambientLight intensity={0.26} />
       <directionalLight
         position={[sunDirection[0] * 8, sunDirection[1] * 8, sunDirection[2] * 8]}
@@ -287,37 +291,5 @@ export function SpaceBackground({
       <SunMoonLayer sunDirection={sunDirection} />
       {includeStars ? <StarfieldLayers isMobile={isMobile} /> : null}
     </>
-  );
-}
-
-/** Full-viewport WebGL layer so stars appear behind the whole page (e.g. right column in split layout). */
-export function StarfieldBackdrop({
-  isMobile,
-  reducedMotion,
-}: {
-  isMobile: boolean;
-  reducedMotion: boolean;
-}) {
-  const dpr: [number, number] = reducedMotion ? [1, 1.2] : [1, 1.5];
-  return (
-    <Canvas
-      className="pointer-events-none absolute inset-0 size-full"
-      dpr={dpr}
-      gl={{
-        antialias: true,
-        alpha: false,
-        powerPreference: "high-performance",
-        toneMapping: ACESFilmicToneMapping,
-        toneMappingExposure: 1.05,
-        outputColorSpace: SRGBColorSpace,
-      }}
-      camera={{ position: [0, 0, 1], fov: 75 }}
-    >
-      <Suspense fallback={null}>
-        <SpacePhotoBackdrop opacity={0.5} />
-        <StarfieldLayers isMobile={isMobile} />
-      </Suspense>
-      {!reducedMotion && <AdaptiveDpr pixelated />}
-    </Canvas>
   );
 }

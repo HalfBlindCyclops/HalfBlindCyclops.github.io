@@ -7,16 +7,16 @@ import { MathUtils, Vector3 } from "three";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import { latLonToSceneWorld } from "@/lib/geo";
 
-/** Keep orbit drag inside a narrow cone around the section's framed view (radians). */
-const WIGGLE_MAX_RAD_DESKTOP = 0.22;
-const WIGGLE_MAX_RAD_MOBILE = 0.15;
-/** Slower orbit drag while a resume section is locked so the signal line doesn’t whip around. */
-const ROTATE_SPEED_SECTION_LOCKED = 0.19;
+/** Max angle (rad) off the framed “ideal” view while a section is open (~66° / ~50°). */
+const WIGGLE_MAX_RAD_DESKTOP = 1.15;
+const WIGGLE_MAX_RAD_MOBILE = 0.88;
+/** Orbit speed while focused — closer to idle so the camera doesn’t feel glued. */
+const ROTATE_SPEED_SECTION_LOCKED = 0.44;
 const ROTATE_SPEED_IDLE = 0.52;
-const DAMPING_SECTION_LOCKED = 0.14;
+const DAMPING_SECTION_LOCKED = 0.09;
 const DAMPING_IDLE = 0.085;
-/** Ease camera back toward the wiggle cone (rad/s blend) so the edge doesn’t snap the signal anchor. */
-const WIGGLE_CONE_BLEND_PER_SEC = 11;
+/** When outside the cone, ease back toward the boundary (lower = softer at the limit). */
+const WIGGLE_CONE_BLEND_PER_SEC = 7;
 
 type SceneMode = "idle" | "focusing" | "focused" | "returning";
 
@@ -29,6 +29,8 @@ type CameraRigProps = {
   mode: SceneMode;
   isMobile: boolean;
   reducedMotion: boolean;
+  /** Desktop split layout: shift the projection center right only while a resume section is open. */
+  applyDesktopViewOffset: boolean;
   onFocusSettled: () => void;
   onReturnSettled: () => void;
 };
@@ -52,6 +54,24 @@ function setFramingForLatLon(
   cameraPosition.x += isMobile ? 0.12 : 0.24;
 }
 
+/** Idle / home return: farther from the globe, no lateral offset (centers with undistorted projection). */
+function setIdleOverviewFraming(
+  lat: number,
+  lon: number,
+  isMobile: boolean,
+  orbitTarget: Vector3,
+  cameraPosition: Vector3,
+  scratchFocus: Vector3,
+  scratchDir: Vector3,
+) {
+  scratchFocus.copy(latLonToSceneWorld(lat, lon, 1.03));
+  orbitTarget.copy(scratchFocus).addScaledVector(scratchFocus, isMobile ? 0.02 : 0.03);
+  scratchDir.copy(scratchFocus).normalize();
+  const distance = isMobile ? 2.88 : 3.42;
+  cameraPosition.copy(scratchDir).multiplyScalar(distance);
+  cameraPosition.y += isMobile ? 0.24 : 0.3;
+}
+
 export function CameraRig({
   latitude,
   longitude,
@@ -60,6 +80,7 @@ export function CameraRig({
   mode,
   isMobile,
   reducedMotion,
+  applyDesktopViewOffset,
   onFocusSettled,
   onReturnSettled,
 }: CameraRigProps) {
@@ -95,7 +116,7 @@ export function CameraRig({
   }, [latitude, longitude, mode]);
 
   const syncHomeVectors = () => {
-    setFramingForLatLon(
+    setIdleOverviewFraming(
       homeLatitude,
       homeLongitude,
       isMobile,
@@ -130,7 +151,12 @@ export function CameraRig({
       updateProjectionMatrix: () => void;
     };
 
-    if (isMobile || !perspective.setViewOffset || !perspective.clearViewOffset) {
+    if (
+      isMobile ||
+      !applyDesktopViewOffset ||
+      !perspective.setViewOffset ||
+      !perspective.clearViewOffset
+    ) {
       perspective.clearViewOffset?.();
       perspective.updateProjectionMatrix();
       return;
@@ -145,7 +171,7 @@ export function CameraRig({
       perspective.clearViewOffset?.();
       perspective.updateProjectionMatrix();
     };
-  }, [camera, isMobile, size.height, size.width]);
+  }, [applyDesktopViewOffset, camera, isMobile, size.height, size.width]);
 
   useFrame((_, delta) => {
     if (!controlsRef.current) return;
@@ -155,7 +181,6 @@ export function CameraRig({
     const ft = focusTarget.current;
     const dfp = desiredFocusPosition.current;
     const td = tempDirection.current;
-    const sf = scratchFocus.current;
     const shouldFocus = latitude !== null && longitude !== null && mode !== "returning";
 
     syncHomeVectors();
@@ -167,7 +192,8 @@ export function CameraRig({
       longitude !== null &&
       (mode === "focusing" || mode === "focused");
     const canWiggle = mode === "focused" && latitude !== null && longitude !== null;
-    controls.enableRotate = canWiggle;
+    // Orbit drag: off only while camera lerps to a new pin ("focusing"); idle / returning / focused all allow rotate.
+    controls.enableRotate = !sectionFramed || canWiggle;
     controls.enablePan = !sectionFramed;
     controls.enableZoom = !sectionFramed;
 

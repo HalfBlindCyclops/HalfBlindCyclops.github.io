@@ -16,8 +16,13 @@ import { CameraRig } from "@/components/three/CameraRig";
 import { Globe } from "@/components/three/Globe";
 import { GlobeNodes } from "@/components/three/GlobeNodes";
 import { GlobeWeather } from "@/components/three/GlobeWeather";
-import { SpaceBackground, StarfieldBackdrop } from "@/components/three/SpaceBackground";
-import { JUNCTION_X, ResumeConnector } from "@/components/ui/ResumeConnector";
+import { SpaceBackground } from "@/components/three/SpaceBackground";
+import {
+  CONNECTOR_CONNECT_SEC,
+  CONNECTOR_RETRACT_SEC,
+  JUNCTION_X,
+  ResumeConnector,
+} from "@/components/ui/ResumeConnector";
 import { ProfileContactHub } from "@/components/ui/ProfileContactHub";
 import { ResumePanel } from "@/components/ui/ResumePanel";
 import { SceneLoader } from "@/components/ui/SceneLoader";
@@ -363,10 +368,10 @@ export function GlobeExperience() {
   };
 
   const onClosePanel = () => {
-    // Close should immediately clear focus/selection and restore free globe view.
     setConnectorPathsActive(false);
     setSelectedNode(null);
-    setSceneMode("idle");
+    // Lerp camera back to centered overview; onReturnSettled clears returning → idle.
+    setSceneMode("returning");
   };
 
   const dprRange: [number, number] = prefersReducedMotion
@@ -380,24 +385,13 @@ export function GlobeExperience() {
       ref={sectionRef}
       className="relative h-dvh w-full overflow-hidden bg-[radial-gradient(circle_at_top,_#0f172a_0%,_#020617_42%,_#01040f_100%)]"
     >
-      {isSplitView ? (
-        <div
-          className="pointer-events-none absolute inset-0 z-0 hidden bg-black md:block"
-          aria-hidden
-        >
-          <StarfieldBackdrop
-            isMobile={isMobile}
-            reducedMotion={Boolean(prefersReducedMotion)}
-          />
-        </div>
-      ) : null}
-      {/* Full-bleed canvas: a narrow column clips the WebGL viewport and slices the sphere. */}
+      {/* Single WebGL context: sky + stars share the globe camera (parallax with orbit / focus). */}
       <div className="absolute inset-0 z-0">
         <Canvas
           dpr={dprRange}
           gl={{
             antialias: true,
-            alpha: true,
+            alpha: false,
             powerPreference: "high-performance",
             toneMapping: ACESFilmicToneMapping,
             toneMappingExposure: 1.05,
@@ -406,12 +400,7 @@ export function GlobeExperience() {
           camera={{ position: [0, 0.2, 16.5], fov: 40 }}
         >
           <Suspense fallback={null}>
-            <SpaceBackground
-              isMobile={isMobile}
-              sunDirection={SUN_DIRECTION}
-              includeStars={!isSplitView}
-              transparentBackground={isSplitView}
-            />
+            <SpaceBackground isMobile={isMobile} sunDirection={SUN_DIRECTION} />
             <group rotation={[0, GLOBE_GROUP_Y_ROTATION, 0]}>
               <Globe
                 isMobile={isMobile}
@@ -439,6 +428,7 @@ export function GlobeExperience() {
               mode={sceneMode}
               isMobile={isMobile}
               reducedMotion={Boolean(prefersReducedMotion)}
+              applyDesktopViewOffset={isSplitView && selectedNode !== null}
               onFocusSettled={() => {
                 setSceneMode("focused");
                 setConnectorPathsActive(true);
@@ -562,7 +552,7 @@ export function GlobeExperience() {
               }}
               exit={{ scaleX: 0, opacity: 0 }}
               transition={{
-                duration: connectorPathsActive ? 0.38 : 0.08,
+                duration: connectorPathsActive ? CONNECTOR_CONNECT_SEC : CONNECTOR_RETRACT_SEC,
                 ease: [0.22, 1, 0.36, 1],
               }}
             />

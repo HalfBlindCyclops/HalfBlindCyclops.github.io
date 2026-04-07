@@ -340,7 +340,14 @@ function RfLinkPaths({
 const svgClass =
   "pointer-events-none absolute inset-0 h-full w-full overflow-visible";
 
-const svgPresenceTransition = { duration: 0.35, ease: "easeOut" as const };
+/** Opacity-in for signal paths; keep in sync with horizontal beam extend in GlobeExperience. */
+export const CONNECTOR_CONNECT_SEC = 0.28;
+const svgPresenceTransition = { duration: CONNECTOR_CONNECT_SEC, ease: "easeOut" as const };
+
+/** Matches horizontal beam retract in GlobeExperience when switching sections (AnimatePresence exit used last “in” transition otherwise → too slow). */
+export const CONNECTOR_RETRACT_SEC = 0.08;
+const svgRetractEase = [0.22, 1, 0.36, 1] as const;
+const svgRetractTransition = { duration: CONNECTOR_RETRACT_SEC, ease: svgRetractEase };
 
 type ResumeConnectorProps = {
   pinX: number;
@@ -368,8 +375,8 @@ export function ResumeConnector({
       preserveAspectRatio="none"
       initial={{ opacity: 0 }}
       animate={{ opacity: pathsActive ? 1 : 0 }}
-      exit={{ opacity: 0 }}
-      transition={pathsActive ? svgPresenceTransition : { duration: 0.08 }}
+      exit={{ opacity: 0, transition: svgRetractTransition }}
+      transition={pathsActive ? svgPresenceTransition : svgRetractTransition}
     >
       <RfLinkPaths
         pinX={pinX}
