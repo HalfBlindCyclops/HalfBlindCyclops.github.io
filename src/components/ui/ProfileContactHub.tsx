@@ -291,10 +291,14 @@ export function ProfileContactHub() {
             }}
           >
             {showPhoto ? (
-              // eslint-disable-next-line @next/next/no-img-element -- optional user asset in /public
+              // eslint-disable-next-line @next/next/no-img-element -- /public asset; static export uses img not next/image
               <img
                 src={PROFILE_IMAGE_SRC!}
                 alt={PROFILE_DISPLAY_NAME}
+                width={56}
+                height={56}
+                decoding="async"
+                fetchPriority="high"
                 className="absolute inset-0 h-full w-full object-cover"
                 onError={() => setPhotoFailed(true)}
               />

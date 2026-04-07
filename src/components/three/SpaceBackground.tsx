@@ -65,7 +65,7 @@ export function StarfieldLayers({ isMobile }: { isMobile: boolean }) {
 }
 
 function SpacePhotoBackdrop({ opacity = 0.52 }: { opacity?: number }) {
-  const texture = useTexture(publicPath("/space-background.jpg"));
+  const texture = useTexture(publicPath("/space-background.webp"));
   return (
     <mesh renderOrder={-100}>
       <sphereGeometry args={[480, 64, 64]} />
@@ -205,7 +205,7 @@ function SunMoonLayer({ sunDirection }: { sunDirection: [number, number, number]
     return p;
   }, [moonDir]);
   const raysRef = useRef<Sprite>(null);
-  const moonTexture = useTexture(publicPath("/moon-texture-craters.jpg"));
+  const moonTexture = useTexture(publicPath("/moon-texture-craters.webp"));
   const moonMaskTexture = useMemo(() => makeCircularMaskTexture(), []);
   const moonCrescentShadowTexture = useMemo(() => makeCrescentShadowTexture(), []);
   const sunCoreTexture = useMemo(() => makeSunCoreTexture(), []);

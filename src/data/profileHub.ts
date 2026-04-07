@@ -28,8 +28,8 @@ export type ProfileHubRow = ProfileHubStaticRow | ProfileHubInteractiveRow;
 export const PROFILE_DISPLAY_NAME = "Sean Wetherell";
 export const PROFILE_TAGLINE = "CS @ Northeastern University · Boston, MA";
 
-/** Served from `/public/headshot.jpeg`. */
-export const PROFILE_IMAGE_SRC: string | null = publicPath("/headshot.jpeg");
+/** Served from `/public/headshot.webp`. */
+export const PROFILE_IMAGE_SRC: string | null = publicPath("/headshot.webp");
 
 /** Order: Northeastern, degree, Boston, then PDF, phone, email (interactive). */
 export const profileHubRows: ProfileHubRow[] = [

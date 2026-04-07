@@ -6,12 +6,12 @@ import { useTexture } from "@react-three/drei";
 import { useThree } from "@react-three/fiber";
 import { publicPath } from "@/lib/basePath";
 
-/** Flat Blue Marble (no shaded relief) — only day variants referenced so topo assets are never fetched. */
+/** Flat Blue Marble (no shaded relief). High WebP uses max WebP width (16383px); baked from 21600×10800 source. */
 const EARTH_DAY_TEXTURES = {
-  low: publicPath("/bluemarble2knotopo.jpg"),
-  high: publicPath("/bluemarble8knotopo.jpg"),
+  low: publicPath("/bluemarble2knotopo.webp"),
+  high: publicPath("/bluemarble8knotopo.webp"),
 };
-const NIGHT_MAP = publicPath("/blackmarble2k.jpg");
+const NIGHT_MAP = publicPath("/blackmarble2k.webp");
 
 type GlobeProps = {
   isMobile: boolean;

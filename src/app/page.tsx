@@ -1,5 +1,5 @@
-import { GlobeExperience } from "@/components/experience/GlobeExperience";
+import { GlobeExperienceLoader } from "@/components/experience/GlobeExperienceLoader";
 
 export default function Home() {
-  return <GlobeExperience />;
+  return <GlobeExperienceLoader />;
 }

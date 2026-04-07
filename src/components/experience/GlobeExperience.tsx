@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   ACESFilmicToneMapping,
   Raycaster,
@@ -72,6 +72,34 @@ function ConnectorAnchorTracker({
   const camForwardRef = useRef(new Vector3());
   const toPointRef = useRef(new Vector3());
   const prevRef = useRef("");
+  /** ResizeObserver-synced; avoids synchronous layout every frame. */
+  const canvasRectRef = useRef<{
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+  } | null>(null);
+
+  useLayoutEffect(() => {
+    const el = gl.domElement;
+    const sync = () => {
+      const r = el.getBoundingClientRect();
+      canvasRectRef.current = {
+        left: r.left,
+        top: r.top,
+        width: r.width,
+        height: r.height,
+      };
+    };
+    sync();
+    const ro = new ResizeObserver(sync);
+    ro.observe(el);
+    window.addEventListener("resize", sync);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", sync);
+    };
+  }, [gl]);
 
   useFrame(() => {
     const worldPoint = worldPointRef.current;
@@ -92,10 +120,15 @@ function ConnectorAnchorTracker({
     toPoint.copy(worldPoint).sub(camera.position).normalize();
     const inFront = camForward.dot(toPoint) > 0;
 
+    const rect = canvasRectRef.current;
+    if (!rect || rect.width <= 0) {
+      onChange({ xPercent: 0, yPercent: 0, visible: false });
+      return;
+    }
+
     // Full-viewport canvas: map NDC → canvas pixels → viewport % for connector pin.
     const px = (ndcPoint.x * 0.5 + 0.5) * size.width;
     const py = (ndcPoint.y * -0.5 + 0.5) * size.height;
-    const rect = gl.domElement.getBoundingClientRect();
     const screenX = rect.left + px;
     const screenY = rect.top + py;
     const vw = typeof window !== "undefined" ? window.innerWidth : 1;
@@ -133,6 +166,8 @@ function useMobileLayout() {
   return isMobile;
 }
 
+const CURSOR_COORDS_MISS = "__miss__";
+
 function CursorLatLonTracker({
   onChange,
 }: {
@@ -141,7 +176,8 @@ function CursorLatLonTracker({
   const { camera, gl } = useThree();
   const pointerRef = useRef(new Vector2(2, 2));
   const rayRef = useRef(new Raycaster());
-  const prevKeyRef = useRef("");
+  const hitRef = useRef(new Vector3());
+  const prevKeyRef = useRef<string>(CURSOR_COORDS_MISS);
 
   useEffect(() => {
     const onMove = (e: PointerEvent) => {
@@ -153,7 +189,10 @@ function CursorLatLonTracker({
 
     const onLeave = () => {
       pointerRef.current.set(2, 2);
-      onChange({ latitude: null, longitude: null });
+      if (prevKeyRef.current !== CURSOR_COORDS_MISS) {
+        prevKeyRef.current = CURSOR_COORDS_MISS;
+        onChange({ latitude: null, longitude: null });
+      }
     };
 
     gl.domElement.addEventListener("pointermove", onMove);
@@ -166,7 +205,14 @@ function CursorLatLonTracker({
 
   useFrame(() => {
     const p = pointerRef.current;
-    if (Math.abs(p.x) > 1 || Math.abs(p.y) > 1) return;
+    /** Pointer left canvas or invalid NDC — show N/A (red) instead of freezing last globe hit. */
+    if (Math.abs(p.x) > 1 || Math.abs(p.y) > 1) {
+      if (prevKeyRef.current !== CURSOR_COORDS_MISS) {
+        prevKeyRef.current = CURSOR_COORDS_MISS;
+        onChange({ latitude: null, longitude: null });
+      }
+      return;
+    }
 
     const ray = rayRef.current;
     ray.setFromCamera(p, camera);
@@ -176,12 +222,25 @@ function CursorLatLonTracker({
     const b = origin.dot(dir);
     const c = origin.lengthSq() - 1;
     const disc = b * b - c;
-    if (disc < 0) return;
+    if (disc < 0) {
+      if (prevKeyRef.current !== CURSOR_COORDS_MISS) {
+        prevKeyRef.current = CURSOR_COORDS_MISS;
+        onChange({ latitude: null, longitude: null });
+      }
+      return;
+    }
 
     const t = -b - Math.sqrt(disc);
-    if (t <= 0) return;
+    if (t <= 0) {
+      if (prevKeyRef.current !== CURSOR_COORDS_MISS) {
+        prevKeyRef.current = CURSOR_COORDS_MISS;
+        onChange({ latitude: null, longitude: null });
+      }
+      return;
+    }
 
-    const hit = origin.clone().addScaledVector(dir, t);
+    const hit = hitRef.current;
+    hit.copy(origin).addScaledVector(dir, t);
     const cos = Math.cos(-GLOBE_GROUP_Y_ROTATION);
     const sin = Math.sin(-GLOBE_GROUP_Y_ROTATION);
     const localX = hit.x * cos + hit.z * sin;
@@ -413,7 +472,7 @@ export function GlobeExperience() {
               Lat {cursorLatLon.latitude.toFixed(2)}°, Lon {cursorLatLon.longitude.toFixed(2)}°
             </span>
           ) : (
-            <span className="text-slate-300">N/A</span>
+            <span className="font-medium text-red-400">N/A</span>
           )}
         </div>
       </div>
