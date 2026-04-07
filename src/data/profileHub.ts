@@ -26,7 +26,7 @@ export type ProfileHubInteractiveRow = {
 export type ProfileHubRow = ProfileHubStaticRow | ProfileHubInteractiveRow;
 
 export const PROFILE_DISPLAY_NAME = "Sean Wetherell";
-export const PROFILE_TAGLINE = "CS @ Northeastern · Boston, MA";
+export const PROFILE_TAGLINE = "CS @ Northeastern University · Boston, MA";
 
 /** Served from `/public/headshot.jpeg`. */
 export const PROFILE_IMAGE_SRC: string | null = publicPath("/headshot.jpeg");
@@ -36,7 +36,7 @@ export const profileHubRows: ProfileHubRow[] = [
   {
     id: "university",
     variant: "static",
-    listLabel: "Northeastern",
+    listLabel: "Northeastern University",
     icon: "school",
   },
   {

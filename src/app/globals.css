@@ -40,3 +40,34 @@ a {
   color: inherit;
   text-decoration: none;
 }
+
+/* Resume / profile scroll areas: accent thumb; stable gutter so track reserve shows as soon as overflow applies. */
+.resume-panel-scroll-accent {
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: var(--resume-scroll-thumb) transparent;
+}
+
+.resume-panel-scroll-accent::-webkit-scrollbar {
+  width: 8px;
+}
+
+.resume-panel-scroll-accent::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.resume-panel-scroll-accent::-webkit-scrollbar-thumb {
+  border-radius: 9999px;
+  background: var(--resume-scroll-thumb);
+}
+
+.resume-panel-scroll-accent::-webkit-scrollbar-thumb:hover {
+  filter: brightness(1.1);
+}
+
+/* Profile card icon buttons: hover uses accent vars from ProfileContactHub header */
+.profile-hub-accent-btn:hover {
+  border-color: var(--hub-accent-border-hover);
+  background-color: var(--hub-accent-bg-hover);
+  color: var(--hub-accent-text-hover);
+}

@@ -2,6 +2,7 @@
 
 import { useEffect, useLayoutEffect, useRef } from "react";
 import { motion } from "framer-motion";
+import { ACCENT_COLOR_HEX } from "@/lib/colorFormat";
 
 /** Horizontal beam junction in SVG viewBox units (matches GlobeExperience `CONNECTOR_BAR_LEFT_PCT`). */
 export const JUNCTION_X = 45;
@@ -90,8 +91,6 @@ const RF_PACKET_RIPPLE_MIX = 0.58;
 const RF_LAYER_MULTIPATH_GAIN = 1.22;
 const RF_CHAOS_GAIN = 1.45;
 
-/** Shared stroke for RF background + chord (same thickness / brightness). */
-const RF_LINK_STROKE = "rgba(118, 224, 252, 0.84)";
 const RF_LINK_STROKE_WIDTH = 2.35;
 
 const PACKET_TRAVEL_SEC = 1.25;
@@ -249,6 +248,7 @@ function RfLinkPaths({
   yJunction,
   reducedMotion,
   pathsActive,
+  lineColor = ACCENT_COLOR_HEX,
 }: {
   pinX: number;
   pinY: number;
@@ -256,6 +256,7 @@ function RfLinkPaths({
   reducedMotion: boolean;
     /** When false, paths are cleared and the RF loop is paused. */
   pathsActive: boolean;
+  lineColor?: string;
 }) {
   const rfLayerRef = useRef<SVGPathElement | null>(null);
   const chordRef = useRef<SVGPathElement | null>(null);
@@ -320,17 +321,18 @@ function RfLinkPaths({
     strokeLinejoin: "round" as const,
   };
 
-  const lineStyle = {
+  const commonLine = {
     fill: "none" as const,
-    stroke: RF_LINK_STROKE,
+    stroke: lineColor,
+    strokeOpacity: 1,
     strokeWidth: RF_LINK_STROKE_WIDTH,
     ...pathRender,
   };
 
   return (
     <>
-      <path ref={rfLayerRef} {...lineStyle} />
-      <path ref={chordRef} {...lineStyle} />
+      <path ref={rfLayerRef} {...commonLine} />
+      <path ref={chordRef} {...commonLine} />
     </>
   );
 }
@@ -347,6 +349,7 @@ type ResumeConnectorProps = {
   reducedMotion: boolean;
   /** When false, paths are hidden and the RF loop pauses (e.g. brief gap when switching pins). */
   pathsActive: boolean;
+  lineColor?: string;
 };
 
 export function ResumeConnector({
@@ -355,10 +358,12 @@ export function ResumeConnector({
   yJunction,
   reducedMotion,
   pathsActive,
+  lineColor = ACCENT_COLOR_HEX,
 }: ResumeConnectorProps) {
   return (
     <motion.svg
       className={svgClass}
+      style={{ color: lineColor }}
       viewBox="0 0 100 100"
       preserveAspectRatio="none"
       initial={{ opacity: 0 }}
@@ -372,6 +377,7 @@ export function ResumeConnector({
         yJunction={yJunction}
         reducedMotion={reducedMotion}
         pathsActive={pathsActive}
+        lineColor="currentColor"
       />
     </motion.svg>
   );

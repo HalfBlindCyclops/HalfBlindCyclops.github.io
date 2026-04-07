@@ -1,7 +1,13 @@
 "use client";
 
 import { Suspense, useEffect, useRef, useState } from "react";
-import { ACESFilmicToneMapping, SRGBColorSpace, Vector3 } from "three";
+import {
+  ACESFilmicToneMapping,
+  Raycaster,
+  SRGBColorSpace,
+  Vector2,
+  Vector3,
+} from "three";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { AdaptiveDpr } from "@react-three/drei";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
@@ -16,10 +22,22 @@ import { ProfileContactHub } from "@/components/ui/ProfileContactHub";
 import { ResumePanel } from "@/components/ui/ResumePanel";
 import { SceneLoader } from "@/components/ui/SceneLoader";
 import { INITIAL_GLOBE_FOCUS, resumeNodes, type ResumeNode } from "@/data/resumeNodes";
-import { GLOBE_GROUP_Y_ROTATION, latLonToSceneWorld, sunDirectionInSceneWorld } from "@/lib/geo";
+import { ACCENT_COLOR_HEX, colorToRgba } from "@/lib/colorFormat";
+import {
+  GLOBE_GROUP_Y_ROTATION,
+  LONGITUDE_ALIGNMENT_OFFSET_DEG,
+  latLonToSceneWorld,
+  sunDirectionForSunsetAt,
+} from "@/lib/geo";
 
-/** Subsolar: equator, Boston meridian (Americas / East Coast in daylight). */
-const SUN_DIRECTION = sunDirectionInSceneWorld(0, -71.0589);
+/** Terminator through 60°N; sun on horizon there. Longitude sets where that great circle crosses the map. */
+const SUN_TERMINATOR_AT: { lat: number; lon: number } = { lat: -60, lon: -90 };
+
+const SUN_DIRECTION = sunDirectionForSunsetAt(
+  SUN_TERMINATOR_AT.lat,
+  SUN_TERMINATOR_AT.lon,
+  INITIAL_GLOBE_FOCUS,
+);
 
 /** Horizontal beam + SVG junction. Panel anchors after line end. */
 const CONNECTOR_BAR_LEFT_PCT = JUNCTION_X;
@@ -32,6 +50,11 @@ type ConnectorAnchor = {
   xPercent: number;
   yPercent: number;
   visible: boolean;
+};
+
+type CursorLatLon = {
+  latitude: number | null;
+  longitude: number | null;
 };
 
 function ConnectorAnchorTracker({
@@ -110,6 +133,80 @@ function useMobileLayout() {
   return isMobile;
 }
 
+function CursorLatLonTracker({
+  onChange,
+}: {
+  onChange: (next: CursorLatLon) => void;
+}) {
+  const { camera, gl } = useThree();
+  const pointerRef = useRef(new Vector2(2, 2));
+  const rayRef = useRef(new Raycaster());
+  const prevKeyRef = useRef("");
+
+  useEffect(() => {
+    const onMove = (e: PointerEvent) => {
+      const rect = gl.domElement.getBoundingClientRect();
+      const x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      const y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+      pointerRef.current.set(x, y);
+    };
+
+    const onLeave = () => {
+      pointerRef.current.set(2, 2);
+      onChange({ latitude: null, longitude: null });
+    };
+
+    gl.domElement.addEventListener("pointermove", onMove);
+    gl.domElement.addEventListener("pointerleave", onLeave);
+    return () => {
+      gl.domElement.removeEventListener("pointermove", onMove);
+      gl.domElement.removeEventListener("pointerleave", onLeave);
+    };
+  }, [gl, onChange]);
+
+  useFrame(() => {
+    const p = pointerRef.current;
+    if (Math.abs(p.x) > 1 || Math.abs(p.y) > 1) return;
+
+    const ray = rayRef.current;
+    ray.setFromCamera(p, camera);
+    const origin = ray.ray.origin;
+    const dir = ray.ray.direction;
+
+    const b = origin.dot(dir);
+    const c = origin.lengthSq() - 1;
+    const disc = b * b - c;
+    if (disc < 0) return;
+
+    const t = -b - Math.sqrt(disc);
+    if (t <= 0) return;
+
+    const hit = origin.clone().addScaledVector(dir, t);
+    const cos = Math.cos(-GLOBE_GROUP_Y_ROTATION);
+    const sin = Math.sin(-GLOBE_GROUP_Y_ROTATION);
+    const localX = hit.x * cos + hit.z * sin;
+    const localY = hit.y;
+    const localZ = -hit.x * sin + hit.z * cos;
+    const r = Math.hypot(localX, localY, localZ) || 1;
+
+    const lat = (Math.asin(localY / r) * 180) / Math.PI;
+    const lonPrime = (Math.atan2(-localZ, -localX) * 180) / Math.PI;
+    let lon = lonPrime - LONGITUDE_ALIGNMENT_OFFSET_DEG;
+    if (lon > 180) lon -= 360;
+    if (lon < -180) lon += 360;
+
+    const roundedLat = Math.round(lat * 100) / 100;
+    const roundedLon = Math.round(lon * 100) / 100;
+    const key = `${roundedLat}:${roundedLon}`;
+    if (key !== prevKeyRef.current) {
+      prevKeyRef.current = key;
+      onChange({ latitude: roundedLat, longitude: roundedLon });
+    }
+  });
+
+  return null;
+}
+
 export function GlobeExperience() {
   const [selectedNode, setSelectedNode] = useState<ResumeNode | null>(null);
   const [sceneMode, setSceneMode] = useState<SceneMode>("idle");
@@ -120,6 +217,11 @@ export function GlobeExperience() {
     yPercent: 64,
     visible: false,
   });
+  const [cursorLatLon, setCursorLatLon] = useState<CursorLatLon>({
+    latitude: null,
+    longitude: null,
+  });
+  const [useNoTopoTexture, setUseNoTopoTexture] = useState(true);
   const prefersReducedMotion = useReducedMotion();
   const isMobile = useMobileLayout();
 
@@ -134,15 +236,24 @@ export function GlobeExperience() {
       : resumeNodes[
           (resumeNodes.findIndex((n) => n.id === showPanel.id) + 1) % resumeNodes.length
         ];
+  /** Two-phase switch: hide signal line first, then commit node swap next frame. */
+  const [connectorPathsActive, setConnectorPathsActive] = useState(true);
+  const switchRafRef = useRef<number | null>(null);
   /** Desktop: resume panel + connector overlay the right side; globe renders full-viewport (no canvas clip). */
   const isSplitView = !isMobile;
-  const showConnectorLine = isSplitView && selectedNode !== null;
-  /** Lower % = higher on screen. Kept high to leave most of the viewport for the resume panel. */
+  const showConnectorLine =
+    isSplitView &&
+    selectedNode !== null &&
+    sceneMode === "focused" &&
+    connectorPathsActive;
+  /** Lower % = higher on screen. Same pin-based beam + same panel lift offset for every resume tab vs the beam. */
   const streamStartYPercent = selectedNode
     ? Math.max(12, Math.min(32, 26 - (selectedNode.latitude / 90) * 18))
     : 22;
   const streamStartY = `${streamStartYPercent}%`;
-  const splitPanelTop = `calc(${streamStartYPercent}% + 1rem)`;
+  const RESUME_PANEL_LIFT_PCT = 4;
+  const resumePanelTopPercent = Math.max(10, streamStartYPercent - RESUME_PANEL_LIFT_PCT);
+  const splitPanelTop = `calc(${resumePanelTopPercent}% + 1rem)`;
   const splitPanelLeft = `calc(${CONNECTOR_LINE_END_PCT}% + 0.5rem)`;
   const splitPanelWidth = `min(52rem, calc(100% - ${CONNECTOR_LINE_END_PCT}% - 1.25rem))`;
   // Horizontal beam is h-[2px] with top at streamStartY — center is 1px lower (same coords as SVG viewBox %).
@@ -150,26 +261,6 @@ export function GlobeExperience() {
     100,
     streamStartYPercent + (1 / Math.max(1, sectionHeight)) * 100,
   );
-
-  /** Briefly hide uplink when switching sections so the line does not crawl for ~1s; visible again during camera travel. */
-  const [connectorPathsActive, setConnectorPathsActive] = useState(true);
-  const prevSelectedIdRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    const id = activeNodeId;
-    if (id === null) {
-      prevSelectedIdRef.current = null;
-      setConnectorPathsActive(true);
-      return;
-    }
-    const prev = prevSelectedIdRef.current;
-    prevSelectedIdRef.current = id;
-    if (prev !== null && prev !== id) {
-      setConnectorPathsActive(false);
-      const t = window.setTimeout(() => setConnectorPathsActive(true), 1000);
-      return () => window.clearTimeout(t);
-    }
-  }, [activeNodeId]);
 
   useEffect(() => {
     const el = sectionRef.current;
@@ -183,14 +274,41 @@ export function GlobeExperience() {
     };
   }, []);
 
+  useEffect(
+    () => () => {
+      if (switchRafRef.current !== null) {
+        cancelAnimationFrame(switchRafRef.current);
+      }
+    },
+    [],
+  );
+
   const onSelectNode = (node: ResumeNode) => {
+    if (selectedNode?.id === node.id) return;
+
+    if (selectedNode !== null) {
+      // Phase 1: hide existing line immediately to avoid one-frame connector glitch.
+      setConnectorPathsActive(false);
+      if (switchRafRef.current !== null) cancelAnimationFrame(switchRafRef.current);
+      // Phase 2: commit node change on next frame.
+      switchRafRef.current = requestAnimationFrame(() => {
+        setSelectedNode(node);
+        setSceneMode("focusing");
+      });
+      return;
+    }
+
+    // Initial selection.
+    setConnectorPathsActive(false);
     setSelectedNode(node);
     setSceneMode("focusing");
   };
 
   const onClosePanel = () => {
-    if (!selectedNode) return;
-    setSceneMode("returning");
+    // Close should immediately clear focus/selection and restore free globe view.
+    setConnectorPathsActive(false);
+    setSelectedNode(null);
+    setSceneMode("idle");
   };
 
   const dprRange: [number, number] = prefersReducedMotion
@@ -198,6 +316,12 @@ export function GlobeExperience() {
     : isMobile
       ? [1, 1.2]
       : [1, 1.5];
+
+  const topoBtnStyle = {
+    borderColor: colorToRgba(ACCENT_COLOR_HEX, 0.45),
+    backgroundColor: colorToRgba(ACCENT_COLOR_HEX, 0.12),
+    color: "rgb(236, 254, 255)",
+  } as const;
 
   return (
     <section
@@ -241,6 +365,7 @@ export function GlobeExperience() {
                 isMobile={isMobile}
                 reducedMotion={Boolean(prefersReducedMotion)}
                 sunDirection={SUN_DIRECTION}
+                useNoTopoTexture={useNoTopoTexture}
               />
               <GlobeWeather
                 isMobile={isMobile}
@@ -251,6 +376,7 @@ export function GlobeExperience() {
               <GlobeNodes
                 activeNodeId={activeNodeId}
                 reducedMotion={Boolean(prefersReducedMotion)}
+                accentColor={ACCENT_COLOR_HEX}
                 onSelect={onSelectNode}
               />
             </group>
@@ -262,7 +388,10 @@ export function GlobeExperience() {
               mode={sceneMode}
               isMobile={isMobile}
               reducedMotion={Boolean(prefersReducedMotion)}
-              onFocusSettled={() => setSceneMode("focused")}
+              onFocusSettled={() => {
+                setSceneMode("focused");
+                setConnectorPathsActive(true);
+              }}
               onReturnSettled={() => {
                 setSelectedNode(null);
                 setSceneMode("idle");
@@ -273,6 +402,7 @@ export function GlobeExperience() {
               longitude={selectedNode?.longitude ?? null}
               onChange={setConnectorAnchor}
             />
+            <CursorLatLonTracker onChange={setCursorLatLon} />
             {!prefersReducedMotion && <AdaptiveDpr pixelated />}
           </Suspense>
         </Canvas>
@@ -281,6 +411,36 @@ export function GlobeExperience() {
       <div className="pointer-events-none absolute inset-0 z-10 bg-gradient-to-b from-slate-900/20 via-transparent to-slate-950/50" />
 
       <ProfileContactHub />
+      <div className="pointer-events-auto absolute bottom-4 left-4 z-[52] flex max-w-[calc(100vw-2rem)] flex-col gap-3 md:bottom-8 md:left-8 md:max-w-[calc(100vw-4rem)]">
+        <div className="w-[13.5rem] shrink-0 rounded-lg border border-white/20 bg-slate-950/80 px-3 py-2 text-xs backdrop-blur-md md:text-sm">
+          <div className="mb-1 text-[10px] font-medium uppercase tracking-wide text-slate-500">
+            Coordinates
+          </div>
+          {cursorLatLon.latitude !== null && cursorLatLon.longitude !== null ? (
+            <span style={{ color: ACCENT_COLOR_HEX }}>
+              Lat {cursorLatLon.latitude.toFixed(2)}°, Lon {cursorLatLon.longitude.toFixed(2)}°
+            </span>
+          ) : (
+            <span className="text-slate-300">N/A</span>
+          )}
+        </div>
+        <div className="max-w-full rounded-lg border border-amber-500/35 bg-slate-950/85 px-3 py-2 backdrop-blur-md">
+          <div className="mb-2 text-[10px] font-medium uppercase tracking-wide text-amber-200/80">
+            Dev tools
+          </div>
+          <div className="flex max-w-full flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setUseNoTopoTexture((v) => !v)}
+              className="shrink-0 rounded-lg border px-3 py-2 text-xs font-medium transition hover:brightness-110 md:text-sm"
+              style={topoBtnStyle}
+              title="Toggle terrain/topography in earth texture"
+            >
+              {useNoTopoTexture ? "No Topo" : "Topo"}
+            </button>
+          </div>
+        </div>
+      </div>
 
       {/* Section nav: centered in space to the right of the top-left profile card. */}
       <div className="pointer-events-none absolute left-0 right-0 top-4 z-[48] flex justify-center pl-[min(19.5rem,calc(100vw-9.5rem))] pr-2 md:top-8 md:pl-[min(22rem,32vw)] md:pr-8">
@@ -288,20 +448,43 @@ export function GlobeExperience() {
           className="pointer-events-auto flex max-w-full flex-wrap justify-center gap-2"
           aria-label="Resume sections"
         >
-          {resumeNodes.map((node) => (
-            <button
-              key={node.id}
-              type="button"
-              onClick={() => onSelectNode(node)}
-              className={`min-h-10 shrink-0 rounded-full border px-4 py-2 text-sm font-medium backdrop-blur-md transition ${
-                activeNodeId === node.id
-                  ? "border-cyan-300/80 bg-cyan-500/20 text-cyan-50 shadow-[0_0_20px_rgba(34,211,238,0.15)]"
-                  : "border-white/20 bg-slate-900/55 text-slate-100 hover:border-cyan-200/70 hover:bg-slate-800/70"
-              }`}
-            >
-              {node.title}
-            </button>
-          ))}
+          {resumeNodes.map((node) => {
+            const isActive = activeNodeId === node.id;
+            return (
+              <button
+                key={node.id}
+                type="button"
+                onClick={() => onSelectNode(node)}
+                className="min-h-10 shrink-0 rounded-full border px-4 py-2 text-sm font-medium backdrop-blur-md transition"
+                style={
+                  isActive
+                    ? {
+                        borderColor: colorToRgba(ACCENT_COLOR_HEX, 0.78),
+                        backgroundColor: colorToRgba(ACCENT_COLOR_HEX, 0.18),
+                        color: "rgb(248, 250, 252)",
+                        boxShadow: `0 0 20px ${colorToRgba(ACCENT_COLOR_HEX, 0.16)}`,
+                      }
+                    : {
+                        borderColor: "rgba(255, 255, 255, 0.2)",
+                        backgroundColor: "rgba(15, 23, 42, 0.55)",
+                        color: "rgb(241, 245, 249)",
+                      }
+                }
+                onMouseEnter={(e) => {
+                  if (activeNodeId === node.id) return;
+                  e.currentTarget.style.borderColor = colorToRgba(ACCENT_COLOR_HEX, 0.5);
+                  e.currentTarget.style.backgroundColor = "rgba(30, 41, 59, 0.7)";
+                }}
+                onMouseLeave={(e) => {
+                  if (activeNodeId === node.id) return;
+                  e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.2)";
+                  e.currentTarget.style.backgroundColor = "rgba(15, 23, 42, 0.55)";
+                }}
+              >
+                {node.title}
+              </button>
+            );
+          })}
         </nav>
       </div>
 
@@ -322,23 +505,25 @@ export function GlobeExperience() {
                   pinY={connectorAnchor.yPercent}
                   yJunction={streamJunctionYPercent}
                   reducedMotion={Boolean(prefersReducedMotion)}
-                  pathsActive={connectorPathsActive}
+                  pathsActive
                 />
               )}
             </AnimatePresence>
             <motion.div
               key={selectedNode.id}
-              className="absolute h-[2px] rounded-full bg-cyan-300/85"
+              className="absolute h-[2px] rounded-full"
               style={{
                 top: streamStartY,
                 left: `${CONNECTOR_BAR_LEFT_PCT}%`,
                 width: `${CONNECTOR_BAR_WIDTH_PCT}%`,
                 transformOrigin: "left center",
+                backgroundColor: ACCENT_COLOR_HEX,
+                boxShadow: `0 0 6px ${colorToRgba(ACCENT_COLOR_HEX, 0.5)}, 0 0 14px ${colorToRgba(ACCENT_COLOR_HEX, 0.25)}`,
               }}
               initial={{ scaleX: 0, opacity: 0 }}
               animate={{
-                scaleX: connectorPathsActive ? 1 : 0,
-                opacity: connectorPathsActive ? 1 : 0,
+                scaleX: showConnectorLine ? 1 : 0,
+                opacity: showConnectorLine ? 1 : 0,
               }}
               exit={{ scaleX: 0, opacity: 0 }}
               transition={{

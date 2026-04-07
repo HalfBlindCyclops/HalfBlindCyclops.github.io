@@ -2,6 +2,7 @@
 
 import { motion, AnimatePresence } from "framer-motion";
 import { useProgress } from "@react-three/drei";
+import { ACCENT_COLOR_HEX } from "@/lib/colorFormat";
 
 export function SceneLoader() {
   const { progress, active } = useProgress();
@@ -21,7 +22,8 @@ export function SceneLoader() {
           </p>
           <div className="h-1.5 w-64 overflow-hidden rounded-full bg-white/20">
             <motion.div
-              className="h-full rounded-full bg-cyan-300"
+              className="h-full rounded-full"
+              style={{ backgroundColor: ACCENT_COLOR_HEX }}
               animate={{ width: `${Math.min(progress, 100)}%` }}
               transition={{ duration: 0.2, ease: "easeOut" }}
             />

@@ -7,27 +7,39 @@ import { useThree } from "@react-three/fiber";
 import { publicPath } from "@/lib/basePath";
 
 const EARTH_TEXTURES = {
-  // Starts with 2k for fast first paint, then upgrades to 8k on capable devices.
-  low: {
-    dayMap: publicPath("/bluemarble2k.jpg"),
-    nightMap: publicPath("/blackmarble2k.jpg"),
+  topo: {
+    low: publicPath("/bluemarble2k.jpg"),
+    high: publicPath("/bluemarble8k.jpg"),
   },
-  high: {
-    dayMap: publicPath("/bluemarble8k.jpg"),
-    nightMap: publicPath("/blackmarble8k.jpg"),
+  noTopo: {
+    low: publicPath("/bluemarble2knotopo.jpg"),
+    high: publicPath("/bluemarble8knotopo.jpg"),
   },
+  night: publicPath("/blackmarble2k.jpg"),
 };
 
 type GlobeProps = {
   isMobile: boolean;
   reducedMotion: boolean;
   sunDirection: [number, number, number];
+  useNoTopoTexture: boolean;
 };
 
-export function Globe({ isMobile, reducedMotion, sunDirection }: GlobeProps) {
+export function Globe({
+  isMobile,
+  reducedMotion,
+  sunDirection,
+  useNoTopoTexture,
+}: GlobeProps) {
   const gl = useThree((s) => s.gl);
-  const [dayMapPath, setDayMapPath] = useState(EARTH_TEXTURES.low.dayMap);
-  const nightMapPath = EARTH_TEXTURES.low.nightMap;
+  const textureSet = useNoTopoTexture ? EARTH_TEXTURES.noTopo : EARTH_TEXTURES.topo;
+  const [dayMapPath, setDayMapPath] = useState(textureSet.low);
+  const nightMapPath = EARTH_TEXTURES.night;
+
+  useEffect(() => {
+    // On toggle change, immediately switch to low-res variant for quick feedback.
+    setDayMapPath(textureSet.low);
+  }, [textureSet.high, textureSet.low]);
 
   useEffect(() => {
     // Avoid loading 8k textures on constrained devices to reduce VRAM spikes.
@@ -44,7 +56,7 @@ export function Globe({ isMobile, reducedMotion, sunDirection }: GlobeProps) {
       requestIdleCallback?: (cb: IdleRequestCallback, opts?: IdleRequestOptions) => number;
       cancelIdleCallback?: (id: number) => void;
     };
-    const scheduleUpgrade = () => setDayMapPath(EARTH_TEXTURES.high.dayMap);
+    const scheduleUpgrade = () => setDayMapPath(textureSet.high);
     let timeoutId: ReturnType<typeof setTimeout> | null = null;
     let idleId: number | null = null;
 
@@ -61,7 +73,7 @@ export function Globe({ isMobile, reducedMotion, sunDirection }: GlobeProps) {
     return () => {
       if (timeoutId !== null) clearTimeout(timeoutId);
     };
-  }, [isMobile, reducedMotion]);
+  }, [isMobile, reducedMotion, textureSet.high]);
 
   const onTexturesLoaded = useCallback(
     (loaded: Texture[]) => {
@@ -93,6 +105,7 @@ export function Globe({ isMobile, reducedMotion, sunDirection }: GlobeProps) {
     <mesh renderOrder={0}>
       <sphereGeometry args={[1, segments, segments]} />
       <shaderMaterial
+        key={`${dayMapPath}-${nightMapPath}`}
         toneMapped
         uniforms={{
           dayMap: { value: dayMap },
@@ -143,16 +156,19 @@ export function Globe({ isMobile, reducedMotion, sunDirection }: GlobeProps) {
             float litHemisphere = smoothstep(0.02, 0.42, ndlGeo);
             float polarBoost = 1.0 + 0.36 * poleMix * litHemisphere;
 
-            float specWide = pow(max(dot(N, halfVec), 0.0), 24.0) * mix(0.05, 0.2, waterMask);
+            float specWide = pow(max(dot(N, halfVec), 0.0), 24.0) * mix(0.05, 0.3, waterMask);
             float specTight = pow(max(dot(N, halfVec), 0.0), 96.0) * waterMask;
             float specular = specWide + specTight;
-            float fresnel = pow(1.0 - max(dot(N, V), 0.0), 4.0) * daylight * 0.16;
+            float fresnel = pow(1.0 - max(dot(N, V), 0.0), 4.0) * daylight * 0.2;
 
             float ambientLift = 0.6;
             float diffuseLift = diffuse * 1.62;
+            float oceanAlbedoBoost = 1.0 + waterMask * 0.22;
             vec3 dayColor =
-              dayTex * sunTint * (ambientLift + diffuseLift) * polarBoost
-              + vec3(specular * 0.38 + fresnel * (0.34 + waterMask * 0.6));
+              dayTex * sunTint * (ambientLift + diffuseLift) * polarBoost * oceanAlbedoBoost
+              + vec3(specular * 0.44 + fresnel * (0.38 + waterMask * 0.72));
+            // Extra sun-facing lift on water (texture-only mask — reads as clearer tropical blues).
+            dayColor += waterMask * daylight * diffuse * vec3(0.04, 0.078, 0.11);
 
             vec3 earthshine = dayTex * vec3(0.11, 0.12, 0.14);
             // Keep city lights strongest on the dark side to avoid daytime overglow.

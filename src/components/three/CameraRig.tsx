@@ -1,11 +1,22 @@
 "use client";
 
 import { useLayoutEffect, useEffect, useRef } from "react";
-import { MathUtils, Vector3 } from "three";
 import { OrbitControls } from "@react-three/drei";
 import { useFrame, useThree } from "@react-three/fiber";
+import { MathUtils, Vector3 } from "three";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import { latLonToSceneWorld } from "@/lib/geo";
+
+/** Keep orbit drag inside a narrow cone around the section's framed view (radians). */
+const WIGGLE_MAX_RAD_DESKTOP = 0.22;
+const WIGGLE_MAX_RAD_MOBILE = 0.15;
+/** Slower orbit drag while a resume section is locked so the signal line doesn’t whip around. */
+const ROTATE_SPEED_SECTION_LOCKED = 0.19;
+const ROTATE_SPEED_IDLE = 0.52;
+const DAMPING_SECTION_LOCKED = 0.14;
+const DAMPING_IDLE = 0.085;
+/** Ease camera back toward the wiggle cone (rad/s blend) so the edge doesn’t snap the signal anchor. */
+const WIGGLE_CONE_BLEND_PER_SEC = 11;
 
 type SceneMode = "idle" | "focusing" | "focused" | "returning";
 
@@ -37,7 +48,8 @@ function setFramingForLatLon(
   const distance = isMobile ? 2.12 : 2.5;
   cameraPosition.copy(scratchDir).multiplyScalar(distance);
   cameraPosition.y += isMobile ? 0.24 : 0.3;
-  cameraPosition.x += isMobile ? 0.02 : 0.06;
+  // Positive camera X nudges the globe left on screen.
+  cameraPosition.x += isMobile ? 0.12 : 0.24;
 }
 
 export function CameraRig({
@@ -52,7 +64,7 @@ export function CameraRig({
   onReturnSettled,
 }: CameraRigProps) {
   const controlsRef = useRef<OrbitControlsImpl | null>(null);
-  const { camera } = useThree();
+  const { camera, size } = useThree();
   const target = useRef(new Vector3());
   const focusTarget = useRef(new Vector3());
   const desiredFocusPosition = useRef(new Vector3());
@@ -63,6 +75,10 @@ export function CameraRig({
   const focusNotifiedRef = useRef(false);
   const returnNotifiedRef = useRef(false);
   const prevModeRef = useRef<SceneMode>(mode);
+  const clampIdealDir = useRef(new Vector3());
+  const clampActualDir = useRef(new Vector3());
+  const clampAxis = useRef(new Vector3());
+  const wiggleDirSmoothedRef = useRef(new Vector3());
 
   useEffect(() => {
     const prev = prevModeRef.current;
@@ -100,6 +116,37 @@ export function CameraRig({
     }
   }, [camera, homeLatitude, homeLongitude, isMobile, reducedMotion]);
 
+  useEffect(() => {
+    const perspective = camera as typeof camera & {
+      setViewOffset?: (
+        fullWidth: number,
+        fullHeight: number,
+        x: number,
+        y: number,
+        width: number,
+        height: number,
+      ) => void;
+      clearViewOffset?: () => void;
+      updateProjectionMatrix: () => void;
+    };
+
+    if (isMobile || !perspective.setViewOffset || !perspective.clearViewOffset) {
+      perspective.clearViewOffset?.();
+      perspective.updateProjectionMatrix();
+      return;
+    }
+
+    // Off-center projection keeps the orbit focal point left of screen center
+    // while preserving a full-bleed canvas (avoids clipping/sliced globe).
+    const offsetX = Math.round(size.width * 0.24);
+    perspective.setViewOffset(size.width, size.height, offsetX, 0, size.width, size.height);
+    perspective.updateProjectionMatrix();
+    return () => {
+      perspective.clearViewOffset?.();
+      perspective.updateProjectionMatrix();
+    };
+  }, [camera, isMobile, size.height, size.width]);
+
   useFrame((_, delta) => {
     if (!controlsRef.current) return;
 
@@ -113,19 +160,28 @@ export function CameraRig({
 
     syncHomeVectors();
 
-    const orbitLocked =
-      latitude !== null && longitude !== null && mode !== "idle";
-    controls.enableRotate = !orbitLocked;
-    controls.enablePan = !orbitLocked;
-    controls.enableZoom = !orbitLocked;
+    // Section open: no pan/zoom. Light orbit wiggle only once focus has settled ("focused").
+    // During "focusing", camera still lerps to the framed pose; "returning" restores full orbit.
+    const sectionFramed =
+      latitude !== null &&
+      longitude !== null &&
+      (mode === "focusing" || mode === "focused");
+    const canWiggle = mode === "focused" && latitude !== null && longitude !== null;
+    controls.enableRotate = canWiggle;
+    controls.enablePan = !sectionFramed;
+    controls.enableZoom = !sectionFramed;
 
     let desiredPosition: Vector3;
 
     if (shouldFocus) {
       setFramingForLatLon(latitude, longitude, isMobile, t, dfp, ft, td);
+      // Show more context around the selected node by pulling camera slightly back.
+      dfp.addScaledVector(td, isMobile ? 0.42 : 0.6);
       desiredPosition = dfp;
-      const cameraLerpSpeed = reducedMotion ? 4.2 : 2.9;
-      camera.position.lerp(desiredPosition, MathUtils.clamp(delta * cameraLerpSpeed, 0, 1));
+      if (!canWiggle) {
+        const cameraLerpSpeed = reducedMotion ? 3.6 : 2.1;
+        camera.position.lerp(desiredPosition, MathUtils.clamp(delta * cameraLerpSpeed, 0, 1));
+      }
     } else if (mode === "returning") {
       t.copy(homeOrbitTarget.current);
       desiredPosition = homeCameraPos.current;
@@ -135,10 +191,49 @@ export function CameraRig({
       desiredPosition = camera.position;
     }
 
-    controls.target.lerp(t, MathUtils.clamp(delta * (reducedMotion ? 4.5 : 3.2), 0, 1));
+    controls.target.lerp(t, MathUtils.clamp(delta * (reducedMotion ? 3.8 : 2.5), 0, 1));
     controls.autoRotate = mode === "idle";
     controls.autoRotateSpeed = reducedMotion ? 0.18 : 0.22;
     controls.update();
+
+    if (canWiggle) {
+      let maxWiggle = isMobile ? WIGGLE_MAX_RAD_MOBILE : WIGGLE_MAX_RAD_DESKTOP;
+      if (reducedMotion) maxWiggle *= 0.65;
+
+      // Pin wiggle around the framed orbit pivot; parallel transport of view direction from design target `t`.
+      const desiredDist = dfp.distanceTo(t);
+      const idealDir = clampIdealDir.current.copy(dfp).sub(t).normalize();
+      const pivot = controls.target;
+      const actualDir = clampActualDir.current.copy(camera.position).sub(pivot).normalize();
+
+      let dot = idealDir.dot(actualDir);
+      dot = Math.min(1, Math.max(-1, dot));
+      const ang = Math.acos(dot);
+      let outDir = actualDir;
+
+      if (ang > maxWiggle) {
+        const axis = clampAxis.current.crossVectors(idealDir, actualDir);
+        if (axis.lengthSq() < 1e-12) {
+          axis.set(1, 0, 0).cross(idealDir);
+          if (axis.lengthSq() < 1e-12) axis.set(0, 1, 0).cross(idealDir);
+        }
+        axis.normalize();
+        outDir = clampIdealDir.current.clone().applyAxisAngle(axis, maxWiggle);
+      }
+
+      const wSm = wiggleDirSmoothedRef.current;
+      if (wSm.lengthSq() < 1e-12) wSm.copy(actualDir);
+      const coneBlend = Math.min(1, delta * WIGGLE_CONE_BLEND_PER_SEC * (reducedMotion ? 0.75 : 1));
+      if (ang <= maxWiggle) {
+        wSm.copy(outDir);
+      } else {
+        wSm.lerp(outDir, coneBlend).normalize();
+      }
+      camera.position.copy(pivot).addScaledVector(wSm, desiredDist);
+      camera.lookAt(pivot);
+    } else {
+      wiggleDirSmoothedRef.current.set(0, 0, 0);
+    }
 
     const closeToTarget = controls.target.distanceTo(t) < 0.025;
     const closeToCamera = camera.position.distanceTo(desiredPosition) < 0.09;
@@ -161,6 +256,8 @@ export function CameraRig({
     }
   });
 
+  const sectionLocked = mode === "focused";
+
   return (
     <OrbitControls
       ref={controlsRef}
@@ -170,8 +267,8 @@ export function CameraRig({
       minPolarAngle={0.12}
       maxPolarAngle={Math.PI - 0.12}
       enableDamping
-      dampingFactor={0.085}
-      rotateSpeed={0.52}
+      dampingFactor={sectionLocked ? DAMPING_SECTION_LOCKED : DAMPING_IDLE}
+      rotateSpeed={sectionLocked ? ROTATE_SPEED_SECTION_LOCKED : ROTATE_SPEED_IDLE}
     />
   );
 }

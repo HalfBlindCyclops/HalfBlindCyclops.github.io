@@ -1,15 +1,12 @@
 "use client";
 
-import { AnimatePresence, motion } from "framer-motion";
 import {
   useCallback,
-  useEffect,
   useLayoutEffect,
   useRef,
   useState,
-  type RefObject,
+  type CSSProperties,
 } from "react";
-import { createPortal } from "react-dom";
 import {
   PROFILE_DISPLAY_NAME,
   PROFILE_IMAGE_SRC,
@@ -19,6 +16,7 @@ import {
   type ProfileHubInteractiveRow,
   type ProfileHubRow,
 } from "@/data/profileHub";
+import { ACCENT_COLOR_HEX, colorToRgba } from "@/lib/colorFormat";
 
 function Icon({ type, className }: { type: ProfileContactIcon; className?: string }) {
   const cn = className ?? "h-4 w-4 shrink-0 text-slate-200";
@@ -91,87 +89,15 @@ function resolveCopyValue(contact: ProfileHubInteractiveRow): string {
   return contact.copyValue;
 }
 
-const MENU_MIN_WIDTH_PX = 200;
-
 function InteractiveRow({
   contact,
-  open,
-  onToggle,
-  onClose,
   copiedAction,
   setCopiedAction,
-  scrollContainerRef,
 }: {
   contact: ProfileHubInteractiveRow;
-  open: boolean;
-  onToggle: () => void;
-  onClose: () => void;
   copiedAction: string | null;
   setCopiedAction: (v: string | null) => void;
-  scrollContainerRef: RefObject<HTMLDivElement | null>;
 }) {
-  const buttonRef = useRef<HTMLButtonElement>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
-  const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(null);
-  const [portalReady, setPortalReady] = useState(false);
-
-  useEffect(() => {
-    setPortalReady(true);
-  }, []);
-
-  const updateMenuPosition = useCallback(() => {
-    const btn = buttonRef.current;
-    if (!btn) return;
-    const rect = btn.getBoundingClientRect();
-    const w = MENU_MIN_WIDTH_PX;
-    const left = Math.min(
-      Math.max(8, rect.right - w),
-      Math.max(8, window.innerWidth - w - 8),
-    );
-    setMenuPos({ top: rect.bottom + 4, left });
-  }, []);
-
-  useLayoutEffect(() => {
-    if (!open) {
-      setMenuPos(null);
-      return;
-    }
-    updateMenuPosition();
-  }, [open, updateMenuPosition]);
-
-  useEffect(() => {
-    if (!open) return;
-    const scrollEl = scrollContainerRef.current;
-    const onScrollOrResize = () => updateMenuPosition();
-    window.addEventListener("resize", onScrollOrResize);
-    window.addEventListener("scroll", onScrollOrResize, true);
-    scrollEl?.addEventListener("scroll", onScrollOrResize, { passive: true });
-    return () => {
-      window.removeEventListener("resize", onScrollOrResize);
-      window.removeEventListener("scroll", onScrollOrResize, true);
-      scrollEl?.removeEventListener("scroll", onScrollOrResize);
-    };
-  }, [open, scrollContainerRef, updateMenuPosition]);
-
-  useEffect(() => {
-    if (!open) return;
-    const onDoc = (e: MouseEvent) => {
-      const t = e.target as Node;
-      if (buttonRef.current?.contains(t)) return;
-      if (menuRef.current?.contains(t)) return;
-      onClose();
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    document.addEventListener("mousedown", onDoc);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDoc);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [open, onClose]);
-
   const copy = useCallback(async () => {
     const text = resolveCopyValue(contact);
     if (!text) return;
@@ -179,123 +105,191 @@ function InteractiveRow({
       await navigator.clipboard.writeText(text);
       setCopiedAction(`${contact.id}-copy`);
       window.setTimeout(() => setCopiedAction(null), 2000);
-      onClose();
     } catch {
       /* ignore */
     }
-  }, [contact, onClose, setCopiedAction]);
+  }, [contact, setCopiedAction]);
 
   const hasMailto = Boolean(contact.mailtoHref);
   const hasTel = Boolean(contact.telHref);
   const hasOpen = Boolean(contact.openHref);
-
-  const menuContent =
-    open && portalReady && menuPos && typeof document !== "undefined"
-      ? createPortal(
-          <AnimatePresence>
-            <motion.div
-              key={contact.id}
-              ref={menuRef}
-              role="menu"
-              initial={{ opacity: 0, y: -4 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -4 }}
-              transition={{ duration: 0.15 }}
-              style={{
-                position: "fixed",
-                top: menuPos.top,
-                left: menuPos.left,
-                zIndex: 200,
-                minWidth: MENU_MIN_WIDTH_PX,
-              }}
-              className="rounded-xl border border-white/20 bg-slate-950/95 py-1.5 shadow-xl shadow-black/40 backdrop-blur-md"
-            >
-              <div className="border-b border-white/10 px-3 pb-2 pt-1">
-                <p className="text-[10px] uppercase tracking-wider text-slate-500">Choose an action</p>
-                <p className="truncate text-xs text-slate-300">{contact.listLabel}</p>
-              </div>
-              <div className="flex flex-col gap-0.5 px-1.5 pt-1.5">
-                <button
-                  type="button"
-                  role="menuitem"
-                  onClick={() => void copy()}
-                  className="rounded-lg px-3 py-2 text-left text-xs text-slate-100 transition hover:bg-white/10"
-                >
-                  {copiedAction === `${contact.id}-copy` ? "Copied!" : "Copy to clipboard"}
-                </button>
-                {hasMailto ? (
-                  <a
-                    role="menuitem"
-                    href={contact.mailtoHref}
-                    className="rounded-lg px-3 py-2 text-left text-xs text-cyan-100 transition hover:bg-cyan-500/15"
-                  >
-                    Open in email app
-                  </a>
-                ) : null}
-                {hasTel ? (
-                  <a
-                    role="menuitem"
-                    href={contact.telHref}
-                    className="rounded-lg px-3 py-2 text-left text-xs text-cyan-100 transition hover:bg-cyan-500/15"
-                  >
-                    Call
-                  </a>
-                ) : null}
-                {hasOpen ? (
-                  <a
-                    role="menuitem"
-                    href={contact.openHref}
-                    target="_blank"
-                    rel="noreferrer noopener"
-                    className="rounded-lg px-3 py-2 text-left text-xs text-cyan-100 transition hover:bg-cyan-500/15"
-                    onClick={onClose}
-                  >
-                    Open in new tab
-                  </a>
-                ) : null}
-              </div>
-            </motion.div>
-          </AnimatePresence>,
-          document.body,
-        )
-      : null;
+  const buttonClass =
+    "profile-hub-accent-btn inline-flex h-7 w-7 items-center justify-center rounded-md border border-white/15 text-slate-200 transition";
 
   return (
-    <div className="relative">
-      <button
-        ref={buttonRef}
-        type="button"
-        onClick={onToggle}
-        aria-expanded={open}
-        aria-haspopup="true"
-        className="flex w-full items-center gap-2.5 rounded-lg border border-transparent py-2 pl-1 pr-2 text-left text-sm text-slate-200 transition hover:border-white/15 hover:bg-white/5"
-      >
-        <Icon type={contact.icon} />
-        <span className="min-w-0 flex-1 truncate">{contact.listLabel}</span>
-        <span className="text-[10px] text-slate-500" aria-hidden>
-          ···
-        </span>
-      </button>
-      {menuContent}
+    <div className="flex items-center gap-2.5 rounded-lg border border-transparent py-2 pl-1 pr-2 text-left text-sm text-slate-200">
+      <Icon type={contact.icon} />
+      <span className="min-w-0 flex-1 truncate">{contact.listLabel}</span>
+      {contact.id === "resume" && hasOpen ? (
+        <>
+          <a
+            href={contact.openHref}
+            download
+            className={buttonClass}
+            title="Download resume"
+            aria-label="Download resume"
+          >
+            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.9">
+              <path d="M12 3v11" strokeLinecap="round" />
+              <path d="M8 11l4 4 4-4" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M5 19h14" strokeLinecap="round" />
+            </svg>
+          </a>
+          <a
+            href={contact.openHref}
+            target="_blank"
+            rel="noreferrer noopener"
+            className={buttonClass}
+            title="Open resume"
+            aria-label="Open resume"
+          >
+            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.9">
+              <path d="M14 4h6v6" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M10 14L20 4" strokeLinecap="round" />
+              <path d="M20 14v6h-16v-16h6" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </a>
+        </>
+      ) : null}
+      {contact.id === "phone" && hasTel ? (
+        <>
+          <a
+            href={contact.telHref}
+            className={buttonClass}
+            title="Call phone"
+            aria-label="Call phone"
+          >
+            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.9">
+              <path d="M6.5 4h3l1.5 4-2 1.5a12 12 0 006.5 6.5l1.5-2 4 1.5v3a1 1 0 01-1 1A17 17 0 016.5 5a1 1 0 011-1z" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </a>
+          <button
+            type="button"
+            onClick={() => void copy()}
+            className={buttonClass}
+            title={copiedAction === `${contact.id}-copy` ? "Copied" : "Copy phone"}
+            aria-label={copiedAction === `${contact.id}-copy` ? "Phone copied" : "Copy phone"}
+          >
+            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.9">
+              <rect x="9" y="9" width="11" height="11" rx="2" />
+              <rect x="4" y="4" width="11" height="11" rx="2" />
+            </svg>
+          </button>
+        </>
+      ) : null}
+      {contact.id === "email" && hasMailto ? (
+        <>
+          <a
+            href={contact.mailtoHref}
+            className={buttonClass}
+            title="Compose email"
+            aria-label="Compose email"
+          >
+            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.9">
+              <rect x="3" y="5" width="18" height="14" rx="2" />
+              <path d="M3 7l9 6 9-6" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </a>
+          <button
+            type="button"
+            onClick={() => void copy()}
+            className={buttonClass}
+            title={copiedAction === `${contact.id}-copy` ? "Copied" : "Copy email"}
+            aria-label={copiedAction === `${contact.id}-copy` ? "Email copied" : "Copy email"}
+          >
+            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.9">
+              <rect x="9" y="9" width="11" height="11" rx="2" />
+              <rect x="4" y="4" width="11" height="11" rx="2" />
+            </svg>
+          </button>
+        </>
+      ) : null}
+      {!hasMailto && !hasTel && !hasOpen ? (
+        <button
+          type="button"
+          onClick={() => void copy()}
+          className={buttonClass}
+          title={copiedAction === `${contact.id}-copy` ? "Copied" : "Copy"}
+          aria-label={copiedAction === `${contact.id}-copy` ? "Copied" : "Copy"}
+        >
+          <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.9">
+            <rect x="9" y="9" width="11" height="11" rx="2" />
+            <rect x="4" y="4" width="11" height="11" rx="2" />
+          </svg>
+        </button>
+      ) : null}
     </div>
   );
 }
 
 export function ProfileContactHub() {
-  const [openId, setOpenId] = useState<string | null>(null);
   const [copiedAction, setCopiedAction] = useState<string | null>(null);
   const [photoFailed, setPhotoFailed] = useState(false);
+  const [hasVerticalScroll, setHasVerticalScroll] = useState(false);
   const showPhoto = Boolean(PROFILE_IMAGE_SRC) && !photoFailed;
   const cardScrollRef = useRef<HTMLDivElement>(null);
 
+  const updateScrollMetrics = useCallback(() => {
+    const el = cardScrollRef.current;
+    if (!el) return;
+    setHasVerticalScroll(el.scrollHeight > Math.ceil(el.clientHeight));
+  }, []);
+
+  useLayoutEffect(() => {
+    const el = cardScrollRef.current;
+    if (!el) return;
+    updateScrollMetrics();
+    let raf2 = 0;
+    const raf1 = requestAnimationFrame(() => {
+      updateScrollMetrics();
+      raf2 = requestAnimationFrame(updateScrollMetrics);
+    });
+    const ro = new ResizeObserver(updateScrollMetrics);
+    ro.observe(el);
+    el.addEventListener("scroll", updateScrollMetrics, { passive: true });
+    return () => {
+      cancelAnimationFrame(raf1);
+      cancelAnimationFrame(raf2);
+      ro.disconnect();
+      el.removeEventListener("scroll", updateScrollMetrics);
+    };
+  }, [updateScrollMetrics]);
+
+  const cardScrollClass =
+    "max-h-[min(72dvh,calc(100dvh-5.5rem))] overflow-x-hidden overscroll-contain rounded-2xl border border-white/15 bg-slate-950/70 p-4 shadow-lg shadow-black/30 backdrop-blur-xl " +
+    (hasVerticalScroll
+      ? "overflow-y-scroll resume-panel-scroll-accent "
+      : "overflow-y-auto ");
+
   return (
-    <header className="pointer-events-auto absolute left-4 top-4 z-50 max-w-[min(92vw,18rem)] text-left md:left-8 md:top-8 md:max-w-[19rem]">
+    <header
+      className="pointer-events-auto absolute left-4 top-4 z-50 max-w-[min(92vw,18rem)] text-left md:left-8 md:top-8 md:max-w-[19rem]"
+      style={
+        {
+          ["--hub-accent-border-hover" as string]: colorToRgba(ACCENT_COLOR_HEX, 0.55),
+          ["--hub-accent-bg-hover" as string]: colorToRgba(ACCENT_COLOR_HEX, 0.12),
+          ["--hub-accent-text-hover" as string]: colorToRgba(ACCENT_COLOR_HEX, 0.95),
+          ["--hub-avatar-accent" as string]: colorToRgba(ACCENT_COLOR_HEX, 0.35),
+          ["--hub-initials" as string]: colorToRgba(ACCENT_COLOR_HEX, 0.92),
+        } as CSSProperties
+      }
+    >
       <div
         ref={cardScrollRef}
-        className="max-h-[min(72dvh,calc(100dvh-5.5rem))] overflow-y-auto overflow-x-hidden overscroll-contain rounded-2xl border border-white/15 bg-slate-950/70 p-4 shadow-lg shadow-black/30 backdrop-blur-xl"
+        className={cardScrollClass}
+        style={
+          hasVerticalScroll
+            ? ({ ["--resume-scroll-thumb" as string]: ACCENT_COLOR_HEX } as CSSProperties)
+            : undefined
+        }
       >
         <div className="flex gap-3">
-          <div className="relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/20 bg-gradient-to-br from-cyan-900/50 to-slate-900">
+          <div
+            className="relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/20"
+            style={{
+              background: "linear-gradient(to bottom right, var(--hub-avatar-accent), rgb(15 23 42))",
+            }}
+          >
             {showPhoto ? (
               // eslint-disable-next-line @next/next/no-img-element -- optional user asset in /public
               <img
@@ -306,8 +300,11 @@ export function ProfileContactHub() {
               />
             ) : (
               <span
-                className="text-sm font-semibold tracking-tight text-cyan-100/90"
-                style={{ fontFamily: "var(--font-orbitron), sans-serif" }}
+                className="text-sm font-semibold tracking-tight"
+                style={{
+                  fontFamily: "var(--font-orbitron), sans-serif",
+                  color: "var(--hub-initials)",
+                }}
                 aria-hidden
               >
                 SW
@@ -334,12 +331,8 @@ export function ProfileContactHub() {
                 ) : (
                   <InteractiveRow
                     contact={row}
-                    open={openId === row.id}
-                    onToggle={() => setOpenId((id) => (id === row.id ? null : row.id))}
-                    onClose={() => setOpenId(null)}
                     copiedAction={copiedAction}
                     setCopiedAction={setCopiedAction}
-                    scrollContainerRef={cardScrollRef}
                   />
                 )}
               </li>

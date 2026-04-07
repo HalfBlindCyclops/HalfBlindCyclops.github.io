@@ -3,15 +3,13 @@
 import { useFrame } from "@react-three/fiber";
 import { useMemo, useRef } from "react";
 import {
-  BufferAttribute,
-  BufferGeometry,
   Color,
   FrontSide,
   NormalBlending,
   ShaderMaterial,
   Vector3,
 } from "three";
-import type { Mesh, Points as PointsType } from "three";
+import type { Mesh } from "three";
 
 type GlobeWeatherProps = {
   isMobile: boolean;
@@ -75,6 +73,14 @@ const cloudFragmentShader = `
     return s;
   }
 
+  float regionalMask(vec3 p) {
+    // Create continent/ocean-scale isolated weather regions.
+    float basinA = smoothstep(0.46, 0.78, fbm(p * 0.56 + vec3(14.0, 22.0, -11.0)));
+    float basinB = smoothstep(0.52, 0.82, fbm(p * 0.62 + vec3(-30.0, 7.0, 18.0)));
+    float basinC = smoothstep(0.48, 0.8, fbm(p * 0.58 + vec3(41.0, -16.0, 6.0)));
+    return clamp(max(max(basinA, basinB), basinC), 0.0, 1.0);
+  }
+
   void main() {
     vec3 N = normalize(vNormalW);
     vec3 L = normalize(sunDirection);
@@ -83,27 +89,35 @@ const cloudFragmentShader = `
 
     vec3 drift = vec3(uTime * 0.012, uTime * 0.008, uTime * 0.005);
     vec3 q = P * 2.85 + drift;
+    vec3 qLarge = P * 1.55 + drift * 0.42;
 
     float coarse = fbm(q);
     float detail = fbm(q * 2.6 + vec3(19.2, 8.1, 33.7));
+    float micro = fbm(q * 5.4 + vec3(-9.0, 31.0, 17.0));
     float stormBand = fbm(q * 0.88 + vec3(200.0, 50.0, 10.0));
     stormBand = smoothstep(0.58, 0.92, stormBand);
+    float region = regionalMask(qLarge);
+    float filament = smoothstep(0.53, 0.78, fbm(q * 1.9 + vec3(5.0, -13.0, 22.0)));
 
     float lat = abs(P.y);
     float polarFade = smoothstep(0.84, 0.99, lat);
     float latMask = mix(1.0, 0.38, polarFade);
 
-    float coverage = smoothstep(0.22, 0.62, coarse);
+    float coverage = smoothstep(0.24, 0.64, coarse);
     float dens =
       coverage *
-      (0.42 + 0.58 * smoothstep(0.25, 0.75, detail)) *
+      (0.3 + 0.7 * smoothstep(0.24, 0.78, detail)) *
+      (0.55 + 0.45 * smoothstep(0.28, 0.82, micro)) *
+      (0.22 + 0.78 * region) *
+      (0.76 + 0.24 * filament) *
       latMask *
       (1.0 - 0.18 * stormBand);
 
-    dens = pow(clamp(dens, 0.0, 1.0), 0.92);
+    dens = pow(clamp(dens, 0.0, 1.0), 1.05);
 
     float ndl = dot(N, L);
     float day = smoothstep(-0.14, 0.26, ndl);
+    float night = 1.0 - day;
     float twilight = smoothstep(-0.38, 0.06, ndl) * (1.0 - day);
 
     float sunWrap = clamp(ndl * 0.55 + 0.45, 0.0, 1.0);
@@ -112,13 +126,13 @@ const cloudFragmentShader = `
     lit += vec3(0.1, 0.12, 0.18) * twilight * dens;
 
     float silver = pow(1.0 - max(dot(N, V), 0.0), 3.2);
-    lit += vec3(0.14, 0.16, 0.2) * silver * day * dens * 0.85;
+    lit += vec3(0.14, 0.16, 0.2) * silver * (0.45 + 0.55 * day) * dens * 0.85;
 
     float alpha =
       dens *
-      (0.12 + 0.38 * day + 0.1 * twilight) *
+      (0.16 + 0.27 * day + 0.16 * night + 0.1 * twilight) *
       (1.0 - 0.2 * stormBand);
-    alpha = clamp(alpha, 0.0, 0.52);
+    alpha = clamp(alpha, 0.0, 0.5);
     alpha *= smoothstep(0.0, 0.08, dens);
 
     gl_FragColor = vec4(lit, alpha);
@@ -182,91 +196,13 @@ function CloudLayer({
   );
 }
 
-function randomUnit(out: Float32Array, i: number) {
-  const u = Math.random() * 2 - 1;
-  const v = Math.random() * 2 - 1;
-  const w = Math.random() * 2 - 1;
-  const len = Math.hypot(u, v, w) || 1;
-  out[i] = u / len;
-  out[i + 1] = v / len;
-  out[i + 2] = w / len;
-}
-
 function PrecipitationShell({
   isMobile,
   reducedMotion,
 }: Pick<GlobeWeatherProps, "isMobile" | "reducedMotion">) {
-  const pointsRef = useRef<PointsType>(null);
-  /** Fewer, subtler points — additive + high opacity read as noisy speckles. */
-  const count = isMobile ? 90 : 260;
-
-  const { geometry, radii, speeds } = useMemo(() => {
-    const positions = new Float32Array(count * 3);
-    const r = new Float32Array(count);
-    const sp = new Float32Array(count);
-    for (let i = 0; i < count; i++) {
-      const o = i * 3;
-      randomUnit(positions, o);
-      const radius = 1.012 + Math.random() * 0.032;
-      r[i] = radius;
-      positions[o] *= radius;
-      positions[o + 1] *= radius;
-      positions[o + 2] *= radius;
-      sp[i] = 0.22 + Math.random() * 0.38;
-    }
-    const geom = new BufferGeometry();
-    geom.setAttribute("position", new BufferAttribute(positions, 3));
-    return { geometry: geom, radii: r, speeds: sp };
-  }, [count]);
-
-  useFrame((_, dt) => {
-    if (reducedMotion) return;
-    const pts = pointsRef.current;
-    if (!pts) return;
-    const pos = pts.geometry.attributes.position as BufferAttribute;
-    const arr = pos.array as Float32Array;
-    for (let i = 0; i < count; i++) {
-      const o = i * 3;
-      let x = arr[o];
-      let y = arr[o + 1];
-      let z = arr[o + 2];
-      const len = Math.hypot(x, y, z) || 1e-4;
-      const inv = 1 / len;
-      const sp = speeds[i] * dt * 0.55;
-      x -= x * inv * sp;
-      y -= y * inv * sp;
-      z -= z * inv * sp;
-      const nl = Math.hypot(x, y, z);
-      if (nl < 1.0035) {
-        randomUnit(arr, o);
-        const radius = radii[i];
-        arr[o] *= radius;
-        arr[o + 1] *= radius;
-        arr[o + 2] *= radius;
-      } else {
-        arr[o] = x;
-        arr[o + 1] = y;
-        arr[o + 2] = z;
-      }
-    }
-    pos.needsUpdate = true;
-  });
-
-  return (
-    <points ref={pointsRef} renderOrder={2} frustumCulled={false}>
-      <primitive object={geometry} attach="geometry" />
-      <pointsMaterial
-        color="#c5d8ec"
-        size={isMobile ? 0.014 : 0.011}
-        transparent
-        opacity={isMobile ? 0.11 : 0.09}
-        depthWrite={false}
-        depthTest
-        sizeAttenuation
-        blending={NormalBlending}
-      />
-    </points>
-  );
+  void isMobile;
+  void reducedMotion;
+  return null;
 }
 
 /**

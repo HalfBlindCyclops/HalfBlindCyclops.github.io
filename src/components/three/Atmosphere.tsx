@@ -26,7 +26,7 @@ export function Atmosphere({ sunDirection }: AtmosphereProps) {
         (low dot(P,V)) get strong inscatter so “air” reads as a volume, not only a ring.
       */}
       <mesh renderOrder={2}>
-        <sphereGeometry args={[1.056, 80, 80]} />
+        <sphereGeometry args={[1.012, 80, 80]} />
         <shaderMaterial
           blending={NormalBlending}
           transparent
@@ -85,7 +85,7 @@ export function Atmosphere({ sunDirection }: AtmosphereProps) {
 
       {/* Primary limb / terminator scattering (back faces of a slightly larger sphere) */}
       <mesh renderOrder={4}>
-        <sphereGeometry args={[1.078, 96, 96]} />
+        <sphereGeometry args={[1.022, 96, 96]} />
         <shaderMaterial
           blending={NormalBlending}
           transparent
@@ -177,9 +177,9 @@ export function Atmosphere({ sunDirection }: AtmosphereProps) {
         />
       </mesh>
 
-      {/* Near-surface haze: slightly larger radius + softer falloff so air hugs the planet */}
+      {/* Near-surface haze: very close shell for tight planet-hugging air glow */}
       <mesh renderOrder={3}>
-        <sphereGeometry args={[1.05, 80, 80]} />
+        <sphereGeometry args={[1.005, 80, 80]} />
         <shaderMaterial
           blending={NormalBlending}
           transparent

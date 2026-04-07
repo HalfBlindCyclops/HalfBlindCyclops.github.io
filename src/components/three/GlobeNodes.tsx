@@ -7,9 +7,26 @@ import { useFrame, type ThreeEvent } from "@react-three/fiber";
 import { resumeNodes, type ResumeNode } from "@/data/resumeNodes";
 import { latLonToVector3 } from "@/lib/geo";
 
+/** Push accent toward connector-line brightness; meshBasic + no tone map keeps parity with 2D signal UI. */
+function vividAccentForPin(c: Color, emphasis: boolean): Color {
+  const hsl = { h: 0, s: 0, l: 0 };
+  c.getHSL(hsl);
+  const sMul = emphasis ? 1.28 : 1.18;
+  const lMul = emphasis ? 1.14 : 1.08;
+  const out = new Color();
+  out.setHSL(hsl.h, Math.min(1, hsl.s * sMul), Math.min(0.985, hsl.l * lMul));
+  return out;
+}
+
+/** Metal stalk: cool depth that still reads as part of the accent stack (not flat grey). */
+function stemColorFromAccent(base: Color): Color {
+  return base.clone().multiplyScalar(0.42).lerp(new Color(0x0f172a), 0.38);
+}
+
 type GlobeNodesProps = {
   activeNodeId: string | null;
   reducedMotion: boolean;
+  accentColor?: string;
   onSelect: (node: ResumeNode) => void;
 };
 
@@ -41,7 +58,7 @@ function ActiveConnectionRing({
       <meshBasicMaterial
         color={ringColor}
         transparent
-        opacity={0.82}
+        opacity={0.98}
         toneMapped={false}
         depthWrite={false}
       />
@@ -53,12 +70,14 @@ function NodeMarker({
   node,
   isActive,
   reducedMotion,
+  accentColor,
   onClick,
   onHoverIntent,
 }: {
   node: ResumeNode;
   isActive: boolean;
   reducedMotion: boolean;
+  accentColor?: string;
   onClick: () => void;
   onHoverIntent: (id: string | null) => void;
 }) {
@@ -69,8 +88,17 @@ function NodeMarker({
     () => latLonToVector3(node.latitude, node.longitude, 1.03),
     [node.latitude, node.longitude],
   );
-  const baseColor = useMemo(() => new Color(node.color), [node.color]);
-  const pulseColor = useMemo(() => new Color(node.color).multiplyScalar(1.7), [node.color]);
+  const effectiveColor = accentColor ?? node.color;
+  const baseColor = useMemo(() => new Color().setStyle(effectiveColor), [effectiveColor]);
+  const pinBodyColor = useMemo(
+    () => vividAccentForPin(baseColor, isActive || hovered),
+    [baseColor, isActive, hovered],
+  );
+  const stemColor = useMemo(() => stemColorFromAccent(baseColor), [baseColor]);
+  const uplinkPadBase = useMemo(
+    () => new Color(0x1e3a5f).lerp(baseColor, 0.26),
+    [baseColor],
+  );
   const uplinkRimRef = useRef<Mesh>(null);
   const outward = useMemo(() => point.clone().normalize(), [point]);
   const antennaQuat = useMemo(() => {
@@ -128,7 +156,10 @@ function NodeMarker({
     <group>
       <group position={point} quaternion={antennaQuat}>
         {isActive ? (
-          <ActiveConnectionRing ringColor={pulseColor} reducedMotion={reducedMotion} />
+          <ActiveConnectionRing
+            ringColor={vividAccentForPin(baseColor, true)}
+            reducedMotion={reducedMotion}
+          />
         ) : null}
         <group
           onPointerDown={handlePointerDown}
@@ -137,103 +168,91 @@ function NodeMarker({
           onPointerEnter={() => setHovered(true)}
           onPointerLeave={() => setHovered(false)}
         >
+        {/* Larger invisible hit area so node selection is easy from oblique angles. */}
+        <mesh position={[0, 0.02, 0]}>
+          <sphereGeometry args={[0.045, 14, 14]} />
+          <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+        </mesh>
         {isMapPin ? (
           <>
             <mesh position={[0, 0.017, 0]}>
               <cylinderGeometry args={[0.0038, 0.0038, 0.032, 10]} />
-              <meshStandardMaterial color="#94a3b8" metalness={0.55} roughness={0.32} />
+              <meshStandardMaterial
+                color={stemColor}
+                metalness={0.5}
+                roughness={0.28}
+                emissive={pinBodyColor}
+                emissiveIntensity={0.08}
+              />
             </mesh>
             <mesh position={[0, 0.046, 0]}>
               <cylinderGeometry args={[0.018, 0.0055, 0.026, 12]} />
-              <meshStandardMaterial
-                color={baseColor}
-                emissive={pulseColor}
-                emissiveIntensity={isActive || hovered ? 2.4 : 1.1}
-                metalness={0.2}
-                roughness={0.45}
-                toneMapped={false}
-              />
+              <meshBasicMaterial color={pinBodyColor} toneMapped={false} />
             </mesh>
             <mesh position={[0, 0.074, 0]}>
               <sphereGeometry args={[pinHeadR, 20, 20]} />
-              <meshStandardMaterial
-                emissive={pulseColor}
-                emissiveIntensity={isActive || hovered ? 4.2 : 2.0}
-                color={baseColor}
-                metalness={0.15}
-                roughness={0.35}
-                toneMapped={false}
-              />
+              <meshBasicMaterial color={pinBodyColor} toneMapped={false} />
             </mesh>
           </>
         ) : isOrbital ? (
           <>
             <mesh position={[0, 0.026, 0]}>
               <cylinderGeometry args={[0.006, 0.006, 0.05, 10]} />
-              <meshStandardMaterial color="#94a3b8" metalness={0.4} roughness={0.4} />
+              <meshStandardMaterial
+                color={stemColor}
+                metalness={0.38}
+                roughness={0.36}
+                emissive={pinBodyColor}
+                emissiveIntensity={0.07}
+              />
             </mesh>
             <mesh position={[0, 0.056, 0]}>
               <sphereGeometry args={[isActive ? 0.022 : 0.018, 16, 16]} />
-              <meshStandardMaterial
-                emissive={pulseColor}
-                emissiveIntensity={isActive || hovered ? 4.6 : 2.2}
-                color={baseColor}
-                toneMapped={false}
-              />
+              <meshBasicMaterial color={pinBodyColor} toneMapped={false} />
             </mesh>
             <mesh rotation={[Math.PI / 2, 0, 0]} position={[0, 0.042, 0]}>
               <torusGeometry args={[0.032, 0.0035, 8, 28]} />
               <meshBasicMaterial
-                color={pulseColor}
+                color={vividAccentForPin(baseColor, isActive || hovered)}
                 transparent
-                opacity={isActive || hovered ? 0.8 : 0.5}
+                opacity={isActive || hovered ? 0.92 : 0.72}
                 toneMapped={false}
               />
             </mesh>
           </>
         ) : (
           <group scale={isActive || hovered ? 1.42 : 1.32}>
-            <mesh position={[0, 0.0036, 0]}>
-              <cylinderGeometry args={[0.033, 0.034, 0.0072, 36]} />
-              <meshStandardMaterial
-                color="#0f172a"
-                metalness={0.68}
-                roughness={0.36}
-                envMapIntensity={0.9}
-              />
-            </mesh>
             <mesh position={[0, 0.004, 0]}>
               <boxGeometry args={[0.048, 0.0011, 0.002]} />
-              <meshStandardMaterial color="#1e3a5f" metalness={0.5} roughness={0.45} />
+              <meshStandardMaterial color={uplinkPadBase} metalness={0.5} roughness={0.45} />
             </mesh>
             <mesh position={[0, 0.004, 0]}>
               <boxGeometry args={[0.002, 0.0011, 0.048]} />
-              <meshStandardMaterial color="#1e3a5f" metalness={0.5} roughness={0.45} />
+              <meshStandardMaterial color={uplinkPadBase} metalness={0.5} roughness={0.45} />
             </mesh>
             <mesh ref={uplinkRimRef} rotation={[Math.PI / 2, 0, 0]} position={[0, 0.0078, 0]}>
-              <torusGeometry args={[0.035, 0.0022, 10, 40]} />
+              <torusGeometry args={[0.029, 0.0018, 10, 40]} />
               <meshBasicMaterial
-                color={pulseColor}
+                color={vividAccentForPin(baseColor, isActive || hovered)}
                 transparent
-                opacity={isActive || hovered ? 0.9 : 0.58}
+                opacity={isActive || hovered ? 0.96 : 0.78}
                 depthWrite={false}
                 toneMapped={false}
               />
             </mesh>
             <mesh position={[0, 0.014, 0]}>
               <cylinderGeometry args={[0.0036, 0.0032, 0.016, 10]} />
-              <meshStandardMaterial color="#94a3b8" metalness={0.52} roughness={0.34} />
+              <meshStandardMaterial
+                color={stemColor}
+                metalness={0.48}
+                roughness={0.3}
+                emissive={pinBodyColor}
+                emissiveIntensity={0.08}
+              />
             </mesh>
             <mesh position={[0, 0.0245, 0]}>
               <sphereGeometry args={[isActive || hovered ? 0.0094 : 0.0078, 16, 16]} />
-              <meshStandardMaterial
-                color={baseColor}
-                emissive={pulseColor}
-                emissiveIntensity={isActive || hovered ? 5.2 : 2.85}
-                metalness={0.22}
-                roughness={0.32}
-                toneMapped={false}
-              />
+              <meshBasicMaterial color={pinBodyColor} toneMapped={false} />
             </mesh>
           </group>
         )}
@@ -243,7 +262,12 @@ function NodeMarker({
   );
 }
 
-export function GlobeNodes({ activeNodeId, reducedMotion, onSelect }: GlobeNodesProps) {
+export function GlobeNodes({
+  activeNodeId,
+  reducedMotion,
+  accentColor,
+  onSelect,
+}: GlobeNodesProps) {
   const hoverRafRef = useRef<number | null>(null);
   const [globePointer, setGlobePointer] = useState(false);
 
@@ -279,6 +303,7 @@ export function GlobeNodes({ activeNodeId, reducedMotion, onSelect }: GlobeNodes
           node={node}
           isActive={activeNodeId === node.id}
           reducedMotion={reducedMotion}
+          accentColor={accentColor}
           onClick={() => onSelect(node)}
           onHoverIntent={onHoverIntent}
         />

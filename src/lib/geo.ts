@@ -56,3 +56,31 @@ export function sunDirectionInSceneWorld(
   v.normalize();
   return [v.x, v.y, v.z];
 }
+
+/**
+ * Toward-sun unit vector so the day/night terminator passes through (`latitudeDeg`, `longitudeDeg`)
+ * (sun on the horizon there). `preferDayToward` picks the half-sphere that stays sunlit when ambiguous.
+ */
+export function sunDirectionForSunsetAt(
+  latitudeDeg: number,
+  longitudeDeg: number,
+  preferDayToward?: { latitude: number; longitude: number },
+): [number, number, number] {
+  const n = latLonToSceneWorld(latitudeDeg, longitudeDeg, 1);
+  n.normalize();
+  const aux = Math.abs(n.y) < 0.9 ? new Vector3(0, 1, 0) : new Vector3(1, 0, 0);
+  const L = new Vector3().crossVectors(n, aux);
+  if (L.lengthSq() < 1e-12) {
+    L.crossVectors(n, new Vector3(0, 0, 1));
+  }
+  L.normalize();
+  if (preferDayToward) {
+    const h = latLonToSceneWorld(
+      preferDayToward.latitude,
+      preferDayToward.longitude,
+      1,
+    ).normalize();
+    if (L.dot(h) < 0) L.negate();
+  }
+  return [L.x, L.y, L.z];
+}
