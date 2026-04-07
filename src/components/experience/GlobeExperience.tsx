@@ -69,7 +69,7 @@ function ConnectorAnchorTracker({
     toPoint.copy(worldPoint).sub(camera.position).normalize();
     const inFront = camForward.dot(toPoint) > 0;
 
-    // Canvas is in a clipped/moved column; map NDC → canvas pixels → viewport %.
+    // Full-viewport canvas: map NDC → canvas pixels → viewport % for connector pin.
     const px = (ndcPoint.x * 0.5 + 0.5) * size.width;
     const py = (ndcPoint.y * -0.5 + 0.5) * size.height;
     const rect = gl.domElement.getBoundingClientRect();
@@ -134,7 +134,7 @@ export function GlobeExperience() {
       : resumeNodes[
           (resumeNodes.findIndex((n) => n.id === showPanel.id) + 1) % resumeNodes.length
         ];
-  /** Desktop: globe column is always narrow; panel slot is always on the right (no transition from full-width). */
+  /** Desktop: resume panel + connector overlay the right side; globe renders full-viewport (no canvas clip). */
   const isSplitView = !isMobile;
   const showConnectorLine = isSplitView && selectedNode !== null;
   /** Lower % = higher on screen. Kept high to leave most of the viewport for the resume panel. */
@@ -215,16 +215,8 @@ export function GlobeExperience() {
           />
         </div>
       ) : null}
-      <motion.div
-        className="absolute inset-0 z-0"
-        initial={isMobile ? { width: "100%", x: "0%" } : { width: "58%", x: "-7%" }}
-        animate={
-          isMobile
-            ? { width: "100%", x: "0%" }
-            : { width: "58%", x: "-7%" }
-        }
-        transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
-      >
+      {/* Full-bleed canvas: a narrow column clips the WebGL viewport and slices the sphere. */}
+      <div className="absolute inset-0 z-0">
         <Canvas
           dpr={dprRange}
           gl={{
@@ -284,7 +276,7 @@ export function GlobeExperience() {
             {!prefersReducedMotion && <AdaptiveDpr pixelated />}
           </Suspense>
         </Canvas>
-      </motion.div>
+      </div>
 
       <div className="pointer-events-none absolute inset-0 z-10 bg-gradient-to-b from-slate-900/20 via-transparent to-slate-950/50" />
 
