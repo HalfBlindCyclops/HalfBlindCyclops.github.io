@@ -34,7 +34,7 @@ function setFramingForLatLon(
   scratchFocus.copy(latLonToSceneWorld(lat, lon, 1.03));
   orbitTarget.copy(scratchFocus).addScaledVector(scratchFocus, isMobile ? 0.02 : 0.03);
   scratchDir.copy(scratchFocus).normalize();
-  const distance = isMobile ? 2.0 : 2.35;
+  const distance = isMobile ? 2.12 : 2.5;
   cameraPosition.copy(scratchDir).multiplyScalar(distance);
   cameraPosition.y += isMobile ? 0.24 : 0.3;
   cameraPosition.x += isMobile ? 0.02 : 0.06;
