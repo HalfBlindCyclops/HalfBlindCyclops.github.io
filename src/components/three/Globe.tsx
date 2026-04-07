@@ -6,7 +6,10 @@ import { useTexture } from "@react-three/drei";
 import { useThree } from "@react-three/fiber";
 import { publicPath } from "@/lib/basePath";
 
-/** Flat Blue Marble (no shaded relief). High WebP uses max WebP width (16383px); baked from 21600×10800 source. */
+/**
+ * Flat Blue Marble (no shaded relief). High WebP uses max WebP width (16383px); baked from 21600×10800 source.
+ * If GPU memory or upload stalls matter, consider KTX2/Basis (etc.) instead of large decoded bitmaps.
+ */
 const EARTH_DAY_TEXTURES = {
   low: publicPath("/bluemarble2knotopo.webp"),
   high: publicPath("/bluemarble8knotopo.webp"),

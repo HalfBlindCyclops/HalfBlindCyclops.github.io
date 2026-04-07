@@ -10,7 +10,7 @@ import {
   Vector3,
 } from "three";
 import { useFrame, useThree } from "@react-three/fiber";
-import { Stars, useTexture } from "@react-three/drei";
+import { useTexture } from "@react-three/drei";
 import { INITIAL_GLOBE_FOCUS } from "@/data/resumeNodes";
 import { publicPath } from "@/lib/basePath";
 import { latLonToSceneWorld } from "@/lib/geo";
@@ -29,43 +29,35 @@ function SceneClearTone({ opaque }: { opaque: boolean }) {
 }
 
 type SpaceBackgroundProps = {
-  isMobile: boolean;
   sunDirection: [number, number, number];
-  includeStars?: boolean;
+  isMobile: boolean;
   transparentBackground?: boolean;
 };
-
-/** Drei star layers (shared camera with globe). */
-export function StarfieldLayers({ isMobile }: { isMobile: boolean }) {
-  return (
-    <>
-      <Stars
-        radius={isMobile ? 320 : 420}
-        depth={isMobile ? 80 : 120}
-        count={isMobile ? 5000 : 9000}
-        factor={isMobile ? 2.7 : 3.8}
-        saturation={0.28}
-        fade
-        speed={0.25}
-      />
-      <Stars
-        radius={isMobile ? 200 : 280}
-        depth={isMobile ? 45 : 70}
-        count={isMobile ? 2800 : 5500}
-        factor={isMobile ? 5.3 : 7.1}
-        saturation={0.24}
-        fade={false}
-        speed={0.55}
-      />
-    </>
-  );
-}
 
 /** Pitch sky texture (rad, +X axis) so the milky-way band sits lower when the camera looks down over Boston. */
 const SKY_BACKDROP_PITCH = -0.62;
 
-function SpacePhotoBackdrop({ opacity = 0.52 }: { opacity?: number }) {
-  const texture = useTexture(publicPath("/space-background.webp"));
+/**
+ * Bump when replacing sky WebPs so caches bust. Desktop: 4096×2048; mobile: 2048×1024 (`space-background-sm.webp`).
+ * GPU-compressed maps (KTX2/Basis) could replace these if decode/VRAM on load becomes an issue.
+ */
+const SPACE_BACKGROUND_CACHE_KEY = "starmap-4k2k-20250407";
+
+function spaceBackgroundTextureUrl(isMobile: boolean): string {
+  const file = isMobile ? "/space-background-sm.webp" : "/space-background.webp";
+  const path = publicPath(file);
+  const sep = path.includes("?") ? "&" : "?";
+  return `${path}${sep}v=${SPACE_BACKGROUND_CACHE_KEY}`;
+}
+
+function SpacePhotoBackdrop({
+  opacity = 0.52,
+  isMobile,
+}: {
+  opacity?: number;
+  isMobile: boolean;
+}) {
+  const texture = useTexture(spaceBackgroundTextureUrl(isMobile));
   useLayoutEffect(() => {
     texture.colorSpace = SRGBColorSpace;
   }, [texture]);
@@ -271,15 +263,14 @@ function SunMoonLayer({ sunDirection }: { sunDirection: [number, number, number]
 }
 
 export function SpaceBackground({
-  isMobile,
   sunDirection,
-  includeStars = true,
+  isMobile,
   transparentBackground = false,
 }: SpaceBackgroundProps) {
   return (
     <>
       <SceneClearTone opaque={!transparentBackground} />
-      {!transparentBackground ? <SpacePhotoBackdrop opacity={0.78} /> : null}
+      {!transparentBackground ? <SpacePhotoBackdrop opacity={0.78} isMobile={isMobile} /> : null}
       <ambientLight intensity={0.26} />
       <directionalLight
         position={[sunDirection[0] * 8, sunDirection[1] * 8, sunDirection[2] * 8]}
@@ -289,7 +280,6 @@ export function SpaceBackground({
       <pointLight position={[-5.5, -3, -2.2]} intensity={0.28} color="#3b82f6" />
       <pointLight position={[0, 0, -7]} intensity={0.16} color="#64748b" />
       <SunMoonLayer sunDirection={sunDirection} />
-      {includeStars ? <StarfieldLayers isMobile={isMobile} /> : null}
     </>
   );
 }

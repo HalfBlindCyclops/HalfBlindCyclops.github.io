@@ -7,14 +7,15 @@ import { useFrame, type ThreeEvent } from "@react-three/fiber";
 import { resumeNodes, type ResumeNode } from "@/data/resumeNodes";
 import { latLonToVector3 } from "@/lib/geo";
 
-/** Push accent toward connector-line brightness; meshBasic + no tone map keeps parity with 2D signal UI. */
+/** Slight chroma lift for pins; cap lightness so active rings stay blue, not blown-out white. */
 function vividAccentForPin(c: Color, emphasis: boolean): Color {
   const hsl = { h: 0, s: 0, l: 0 };
   c.getHSL(hsl);
-  const sMul = emphasis ? 1.28 : 1.18;
-  const lMul = emphasis ? 1.14 : 1.08;
+  const sMul = emphasis ? 1.1 : 1.05;
+  const lMul = emphasis ? 1.05 : 1.02;
+  const lCap = emphasis ? 0.76 : 0.72;
   const out = new Color();
-  out.setHSL(hsl.h, Math.min(1, hsl.s * sMul), Math.min(0.985, hsl.l * lMul));
+  out.setHSL(hsl.h, Math.min(1, hsl.s * sMul), Math.min(lCap, hsl.l * lMul));
   return out;
 }
 
@@ -30,19 +31,43 @@ type GlobeNodesProps = {
   onSelect: (node: ResumeNode) => void;
 };
 
-/** Flat ring on the globe surface around the active pin (connector target). */
-function ActiveConnectionRing({
+type ActiveRingSpec = {
+  radius: number;
+  tube: number;
+  phase: number;
+  opacity: number;
+  amp: number;
+};
+
+/** Nested tori on the surface; smaller inward, staggered pulse phases for a ripple. */
+const ACTIVE_CONNECTION_RINGS: ActiveRingSpec[] = [
+  { radius: 0.056, tube: 0.0027, phase: 0, opacity: 0.9, amp: 0.062 },
+  { radius: 0.042, tube: 0.0024, phase: 1.25, opacity: 0.76, amp: 0.07 },
+  { radius: 0.03, tube: 0.0021, phase: 2.5, opacity: 0.62, amp: 0.078 },
+  { radius: 0.019, tube: 0.00175, phase: 3.75, opacity: 0.5, amp: 0.085 },
+];
+
+function ActiveConnectionRingBand({
   ringColor,
   reducedMotion,
+  spec,
+  index,
 }: {
   ringColor: Color;
   reducedMotion: boolean;
+  spec: ActiveRingSpec;
+  index: number;
 }) {
   const meshRef = useRef<Mesh>(null);
   useFrame(({ clock }) => {
     const mesh = meshRef.current;
-    if (!mesh || reducedMotion) return;
-    const s = 1 + Math.sin(clock.elapsedTime * 2.35) * 0.055;
+    if (!mesh) return;
+    if (reducedMotion) {
+      mesh.scale.setScalar(1);
+      return;
+    }
+    const t = clock.elapsedTime * 2.32;
+    const s = 1 + Math.sin(t + spec.phase) * spec.amp;
     mesh.scale.setScalar(s);
   });
 
@@ -50,19 +75,41 @@ function ActiveConnectionRing({
     <mesh
       ref={meshRef}
       rotation={[Math.PI / 2, 0, 0]}
-      position={[0, 0.0015, 0]}
+      position={[0, 0.0015 + index * 0.00035, 0]}
       raycast={() => null}
-      renderOrder={2}
+      renderOrder={2 + index}
     >
-      <torusGeometry args={[0.048, 0.0028, 10, 44]} />
+      <torusGeometry args={[spec.radius, spec.tube, 10, 44]} />
       <meshBasicMaterial
         color={ringColor}
         transparent
-        opacity={0.98}
+        opacity={spec.opacity}
         toneMapped={false}
         depthWrite={false}
       />
     </mesh>
+  );
+}
+
+function ActiveConnectionRings({
+  ringColor,
+  reducedMotion,
+}: {
+  ringColor: Color;
+  reducedMotion: boolean;
+}) {
+  return (
+    <>
+      {ACTIVE_CONNECTION_RINGS.map((spec, i) => (
+        <ActiveConnectionRingBand
+          key={i}
+          ringColor={ringColor}
+          reducedMotion={reducedMotion}
+          spec={spec}
+          index={i}
+        />
+      ))}
+    </>
   );
 }
 
@@ -156,7 +203,7 @@ function NodeMarker({
     <group>
       <group position={point} quaternion={antennaQuat}>
         {isActive ? (
-          <ActiveConnectionRing
+          <ActiveConnectionRings
             ringColor={vividAccentForPin(baseColor, true)}
             reducedMotion={reducedMotion}
           />

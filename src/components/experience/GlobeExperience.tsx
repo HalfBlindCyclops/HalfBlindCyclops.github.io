@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import {
   ACESFilmicToneMapping,
   Raycaster,
@@ -28,6 +28,7 @@ import { ResumePanel } from "@/components/ui/ResumePanel";
 import { SceneLoader } from "@/components/ui/SceneLoader";
 import { INITIAL_GLOBE_FOCUS, resumeNodes, type ResumeNode } from "@/data/resumeNodes";
 import { ACCENT_COLOR_HEX, colorToRgba } from "@/lib/colorFormat";
+import { useCanvasScreenRect } from "@/lib/useCanvasScreenRect";
 import {
   GLOBE_GROUP_Y_ROTATION,
   LONGITUDE_ALIGNMENT_OFFSET_DEG,
@@ -62,6 +63,8 @@ type CursorLatLon = {
   longitude: number | null;
 };
 
+const CONNECTOR_ANCHOR_HIDDEN_KEY = "__hidden__";
+
 function ConnectorAnchorTracker({
   latitude,
   longitude,
@@ -76,35 +79,8 @@ function ConnectorAnchorTracker({
   const ndcPointRef = useRef(new Vector3());
   const camForwardRef = useRef(new Vector3());
   const toPointRef = useRef(new Vector3());
-  const prevRef = useRef("");
-  /** ResizeObserver-synced; avoids synchronous layout every frame. */
-  const canvasRectRef = useRef<{
-    left: number;
-    top: number;
-    width: number;
-    height: number;
-  } | null>(null);
-
-  useLayoutEffect(() => {
-    const el = gl.domElement;
-    const sync = () => {
-      const r = el.getBoundingClientRect();
-      canvasRectRef.current = {
-        left: r.left,
-        top: r.top,
-        width: r.width,
-        height: r.height,
-      };
-    };
-    sync();
-    const ro = new ResizeObserver(sync);
-    ro.observe(el);
-    window.addEventListener("resize", sync);
-    return () => {
-      ro.disconnect();
-      window.removeEventListener("resize", sync);
-    };
-  }, [gl]);
+  const lastEmitKeyRef = useRef("");
+  const canvasRectRef = useCanvasScreenRect(gl);
 
   useFrame(() => {
     const worldPoint = worldPointRef.current;
@@ -113,7 +89,10 @@ function ConnectorAnchorTracker({
     const toPoint = toPointRef.current;
 
     if (latitude === null || longitude === null) {
-      onChange({ xPercent: 0, yPercent: 0, visible: false });
+      if (lastEmitKeyRef.current !== CONNECTOR_ANCHOR_HIDDEN_KEY) {
+        lastEmitKeyRef.current = CONNECTOR_ANCHOR_HIDDEN_KEY;
+        onChange({ xPercent: 0, yPercent: 0, visible: false });
+      }
       return;
     }
 
@@ -127,7 +106,10 @@ function ConnectorAnchorTracker({
 
     const rect = canvasRectRef.current;
     if (!rect || rect.width <= 0) {
-      onChange({ xPercent: 0, yPercent: 0, visible: false });
+      if (lastEmitKeyRef.current !== CONNECTOR_ANCHOR_HIDDEN_KEY) {
+        lastEmitKeyRef.current = CONNECTOR_ANCHOR_HIDDEN_KEY;
+        onChange({ xPercent: 0, yPercent: 0, visible: false });
+      }
       return;
     }
 
@@ -148,8 +130,8 @@ function ConnectorAnchorTracker({
     };
 
     const key = `${Math.round(next.xPercent * 10)}:${Math.round(next.yPercent * 10)}:${next.visible ? 1 : 0}`;
-    if (key !== prevRef.current) {
-      prevRef.current = key;
+    if (key !== lastEmitKeyRef.current) {
+      lastEmitKeyRef.current = key;
       onChange(next);
     }
   });
@@ -179,6 +161,7 @@ function CursorLatLonTracker({
   onChange: (next: CursorLatLon) => void;
 }) {
   const { camera, gl } = useThree();
+  const canvasRectRef = useCanvasScreenRect(gl);
   const pointerRef = useRef(new Vector2(2, 2));
   const rayRef = useRef(new Raycaster());
   const hitRef = useRef(new Vector3());
@@ -186,7 +169,8 @@ function CursorLatLonTracker({
 
   useEffect(() => {
     const onMove = (e: PointerEvent) => {
-      const rect = gl.domElement.getBoundingClientRect();
+      const rect = canvasRectRef.current;
+      if (!rect || rect.width <= 0) return;
       const x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
       const y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
       pointerRef.current.set(x, y);
@@ -400,7 +384,7 @@ export function GlobeExperience() {
           camera={{ position: [0, 0.2, 16.5], fov: 40 }}
         >
           <Suspense fallback={null}>
-            <SpaceBackground isMobile={isMobile} sunDirection={SUN_DIRECTION} />
+            <SpaceBackground sunDirection={SUN_DIRECTION} isMobile={isMobile} />
             <group rotation={[0, GLOBE_GROUP_Y_ROTATION, 0]}>
               <Globe
                 isMobile={isMobile}

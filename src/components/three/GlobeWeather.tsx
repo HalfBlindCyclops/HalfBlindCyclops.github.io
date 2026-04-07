@@ -145,11 +145,14 @@ function CloudLayer({
   sunDirection,
 }: GlobeWeatherProps) {
   const meshRef = useRef<Mesh>(null);
+  /** Single Vector3 for the shader uniform (avoid sunVec.clone() in JSX each mount). */
+  const sunDirUniform = useRef(new Vector3());
 
   const sunVec = useMemo(
     () => new Vector3(sunDirection[0], sunDirection[1], sunDirection[2]).normalize(),
     [sunDirection],
   );
+  sunDirUniform.current.copy(sunVec);
   const cloudBright = useMemo(() => new Color("#f2f6fc"), []);
   const cloudShadow = useMemo(() => new Color("#1c2333"), []);
   const cloudStorm = useMemo(() => new Color("#5c6578"), []);
@@ -183,7 +186,7 @@ function CloudLayer({
         polygonOffsetFactor={-0.5}
         polygonOffsetUnits={-0.5}
         uniforms={{
-          sunDirection: { value: sunVec.clone() },
+          sunDirection: { value: sunDirUniform.current },
           uTime: { value: 0 },
           cloudBright: { value: cloudBright },
           cloudShadow: { value: cloudShadow },

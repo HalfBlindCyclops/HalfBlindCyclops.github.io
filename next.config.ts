@@ -8,6 +8,11 @@ function basePathFromEnv(): string | undefined {
   return normalized || undefined;
 }
 
+/**
+ * Static export cannot use the default Next.js Image Optimization API (no server to run it).
+ * Keep `unoptimized: true` and ship tuned rasters from `/public` (WebP, sized per breakpoint where needed).
+ * On the host/CDN, set long `Cache-Control` for `/_next/static/*` and versioned asset URLs.
+ */
 const nextConfig: NextConfig = {
   output: "export",
   images: { unoptimized: true },
