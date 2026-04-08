@@ -3,6 +3,8 @@
 :root {
   --background: #020617;
   --foreground: #e2e8f0;
+  /* Designed on a zoomed-out browser; normalize by scaling rem-based UI sizing. */
+  --ui-scale: 0.67;
 }
 
 @theme inline {
@@ -21,6 +23,20 @@
 
 * {
   box-sizing: border-box;
+}
+
+/* Prevent iOS Safari from inflating text (reads as “everything zoomed” vs desktop dev). */
+html {
+  font-size: calc(16px * var(--ui-scale));
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+@media (max-width: 767px) {
+  :root {
+    /* Keep mobile readability while still reducing oversized controls. */
+    --ui-scale: 0.8;
+  }
 }
 
 body {
