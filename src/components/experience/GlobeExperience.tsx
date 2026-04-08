@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import {
   ACESFilmicToneMapping,
   Raycaster,
@@ -139,18 +139,28 @@ function ConnectorAnchorTracker({
   return null;
 }
 
+const MOBILE_LAYOUT_MQ = "(max-width: 767px)";
+
+function subscribeMobileLayout(onChange: () => void) {
+  const mq = window.matchMedia(MOBILE_LAYOUT_MQ);
+  mq.addEventListener("change", onChange);
+  return () => mq.removeEventListener("change", onChange);
+}
+
+function getMobileLayoutSnapshot() {
+  return window.matchMedia(MOBILE_LAYOUT_MQ).matches;
+}
+
+/**
+ * Split vs stacked layout drives camera distance and `setViewOffset`. `useSyncExternalStore` reads
+ * `matchMedia` on the first client paint (no `useEffect` frame of false → wrong desktop framing).
+ */
 function useMobileLayout() {
-  const [isMobile, setIsMobile] = useState(false);
-
-  useEffect(() => {
-    const media = window.matchMedia("(max-width: 767px)");
-    const onChange = () => setIsMobile(media.matches);
-    onChange();
-    media.addEventListener("change", onChange);
-    return () => media.removeEventListener("change", onChange);
-  }, []);
-
-  return isMobile;
+  return useSyncExternalStore(
+    subscribeMobileLayout,
+    getMobileLayoutSnapshot,
+    () => false,
+  );
 }
 
 const CURSOR_COORDS_MISS = "__miss__";
@@ -372,6 +382,7 @@ export function GlobeExperience() {
       {/* Single WebGL context: sky + stars share the globe camera (parallax with orbit / focus). */}
       <div className="absolute inset-0 z-0">
         <Canvas
+          className="block h-full w-full touch-none"
           dpr={dprRange}
           gl={{
             antialias: true,
@@ -381,7 +392,7 @@ export function GlobeExperience() {
             toneMappingExposure: 1.05,
             outputColorSpace: SRGBColorSpace,
           }}
-          camera={{ position: [0, 0.2, 16.5], fov: 40 }}
+          camera={{ position: [0, 0.2, 21.5], fov: 44 }}
         >
           <Suspense fallback={null}>
             <SpaceBackground sunDirection={SUN_DIRECTION} isMobile={isMobile} />

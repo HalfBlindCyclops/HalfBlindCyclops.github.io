@@ -47,7 +47,7 @@ function setFramingForLatLon(
   scratchFocus.copy(latLonToSceneWorld(lat, lon, 1.03));
   orbitTarget.copy(scratchFocus).addScaledVector(scratchFocus, isMobile ? 0.02 : 0.03);
   scratchDir.copy(scratchFocus).normalize();
-  const distance = isMobile ? 2.12 : 2.5;
+  const distance = isMobile ? 2.38 : 2.94;
   cameraPosition.copy(scratchDir).multiplyScalar(distance);
   cameraPosition.y += isMobile ? 0.24 : 0.3;
   // Positive camera X nudges the globe left on screen.
@@ -67,7 +67,7 @@ function setIdleOverviewFraming(
   scratchFocus.copy(latLonToSceneWorld(lat, lon, 1.03));
   orbitTarget.copy(scratchFocus).addScaledVector(scratchFocus, isMobile ? 0.02 : 0.03);
   scratchDir.copy(scratchFocus).normalize();
-  const distance = isMobile ? 2.88 : 3.42;
+  const distance = isMobile ? 3.22 : 4.08;
   cameraPosition.copy(scratchDir).multiplyScalar(distance);
   cameraPosition.y += isMobile ? 0.24 : 0.3;
 }
@@ -164,7 +164,7 @@ export function CameraRig({
 
     // Off-center projection keeps the orbit focal point left of screen center
     // while preserving a full-bleed canvas (avoids clipping/sliced globe).
-    const offsetX = Math.round(size.width * 0.24);
+    const offsetX = Math.round(size.width * 0.195);
     perspective.setViewOffset(size.width, size.height, offsetX, 0, size.width, size.height);
     perspective.updateProjectionMatrix();
     return () => {
@@ -202,7 +202,7 @@ export function CameraRig({
     if (shouldFocus) {
       setFramingForLatLon(latitude, longitude, isMobile, t, dfp, ft, td);
       // Show more context around the selected node by pulling camera slightly back.
-      dfp.addScaledVector(td, isMobile ? 0.42 : 0.6);
+      dfp.addScaledVector(td, isMobile ? 0.48 : 0.82);
       desiredPosition = dfp;
       if (!canWiggle) {
         const cameraLerpSpeed = reducedMotion ? 3.6 : 2.1;

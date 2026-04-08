@@ -222,10 +222,17 @@ export function ResumePanel({
   const splitTop = splitViewPanelTop ?? `calc(${streamStartY} + 1rem)`;
   const splitAnchored =
     Boolean(isSplitView && splitViewPanelLeft && splitViewPanelWidth);
+  const splitMaxHeight = `calc(100dvh - (${splitTop}) - 1rem)`;
   const splitStyle = splitAnchored
-    ? { left: splitViewPanelLeft, top: splitTop, width: splitViewPanelWidth, right: "auto" as const }
+    ? {
+        left: splitViewPanelLeft,
+        top: splitTop,
+        width: splitViewPanelWidth,
+        right: "auto" as const,
+        maxHeight: splitMaxHeight,
+      }
     : isSplitView
-      ? { right: "2.75rem", top: splitTop }
+      ? { right: "2.75rem", top: splitTop, maxHeight: splitMaxHeight }
       : undefined;
   const accentPanelShadow = `0 25px 50px -12px ${colorToRgba(ACCENT_COLOR_HEX, 0.12)}`;
   const scrollBodyAccent: CSSProperties | undefined = hasVerticalScroll
