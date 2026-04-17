@@ -438,10 +438,6 @@ export function GlobeExperience() {
   const activeNodeId = selectedNode?.id ?? null;
   const isProjectsSelected = selectedNode?.id === "projects";
   const isExperienceSelected = selectedNode?.id === "experience";
-  const showExperienceHoverMenu =
-    isExperienceSelected && (isMobile || hoveredSectionId === "experience");
-  const showProjectsHoverMenu =
-    isProjectsSelected && (isMobile || hoveredSectionId === "projects");
   const projectsNode = useMemo(() => resumeNodes.find((node) => node.id === "projects") ?? null, []);
   const experienceNode = useMemo(() => resumeNodes.find((node) => node.id === "experience") ?? null, []);
   const activeProjectMiniNode =
@@ -489,6 +485,14 @@ export function GlobeExperience() {
     selectedNode !== null && (sceneMode === "focusing" || sceneMode === "focused")
       ? selectedNode
       : null;
+  const showExperienceHoverMenu =
+    showPanel?.id === "experience" &&
+    activeMiniDetail === null &&
+    (isMobile || hoveredSectionId === "experience");
+  const showProjectsHoverMenu =
+    showPanel?.id === "projects" &&
+    activeMiniDetail === null &&
+    (isMobile || hoveredSectionId === "projects");
   const showMainResumePanel = !(
     activeMiniDetail !== null && (isProjectsSelected || isExperienceSelected)
   );
@@ -564,6 +568,7 @@ export function GlobeExperience() {
       // Phase 2: commit node change on next frame.
       switchRafRef.current = requestAnimationFrame(() => {
         setSelectedNode(node);
+        setHoveredSectionId(null);
         if (node.id !== "projects") setActiveProjectMiniNodeId(null);
         if (node.id !== "experience") setActiveExperienceMiniNodeId(null);
         setPendingExperienceScrollIndex(null);
@@ -575,6 +580,7 @@ export function GlobeExperience() {
     // Initial selection.
     setConnectorPathsActive(false);
     setSelectedNode(node);
+    setHoveredSectionId(null);
     if (node.id !== "projects") setActiveProjectMiniNodeId(null);
     if (node.id !== "experience") setActiveExperienceMiniNodeId(null);
     setPendingExperienceScrollIndex(null);
@@ -582,6 +588,7 @@ export function GlobeExperience() {
   };
 
   const onSelectProjectMiniNode = (miniNodeId: string) => {
+    setHoveredSectionId(null);
     if (selectedNode?.id !== "projects") {
       const projectsNode = resumeNodes.find((node) => node.id === "projects");
       if (!projectsNode) return;
@@ -596,6 +603,7 @@ export function GlobeExperience() {
   };
 
   const onSelectExperienceMiniNode = (miniNodeId: string) => {
+    setHoveredSectionId(null);
     if (selectedNode?.id !== "experience") {
       const experienceNode = resumeNodes.find((node) => node.id === "experience");
       if (!experienceNode) return;
@@ -611,6 +619,7 @@ export function GlobeExperience() {
 
   const onClosePanel = () => {
     setConnectorPathsActive(false);
+    setHoveredSectionId(null);
     setActiveProjectMiniNodeId(null);
     setActiveExperienceMiniNodeId(null);
     setPendingExperienceScrollIndex(null);
@@ -678,8 +687,8 @@ export function GlobeExperience() {
                 activeNodeId={activeNodeId}
                 activeProjectMiniNodeId={activeProjectMiniNodeId}
                 activeExperienceMiniNodeId={activeExperienceMiniNodeId}
-                showProjectMiniNodes
-                showExperienceMiniNodes
+                showProjectMiniNodes={isProjectsSelected}
+                showExperienceMiniNodes={isExperienceSelected}
                 reducedMotion={Boolean(prefersReducedMotion)}
                 accentColor={ACCENT_COLOR_HEX}
                 onSelect={onSelectNode}
