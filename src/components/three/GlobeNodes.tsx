@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Color, Mesh, QuadraticBezierCurve3, Quaternion, Vector3 } from "three";
-import { Billboard, Line, Text, useCursor } from "@react-three/drei";
+import { Line, useCursor } from "@react-three/drei";
 import { useFrame, type ThreeEvent } from "@react-three/fiber";
+import type { Line2 } from "three-stdlib";
 import { experienceMiniNodes } from "@/data/experienceMiniNodes";
 import { projectMiniNodes } from "@/data/projectMiniNodes";
 import { resumeNodes, type ResumeNode } from "@/data/resumeNodes";
@@ -319,7 +320,6 @@ function NodeMarker({
 
 function MiniNodeMarker({
   id,
-  title,
   latitude,
   longitude,
   isActive,
@@ -329,7 +329,6 @@ function MiniNodeMarker({
   onHoverIntent,
 }: {
   id: string;
-  title: string;
   latitude: number;
   longitude: number;
   isActive: boolean;
@@ -342,7 +341,6 @@ function MiniNodeMarker({
   const point = useMemo(() => latLonToVector3(latitude, longitude, 1.02), [latitude, longitude]);
   const normal = useMemo(() => point.clone().normalize(), [point]);
   const markerPos = useMemo(() => point.clone().addScaledVector(normal, 0.0135), [normal, point]);
-  const labelPos = useMemo(() => normal.clone().multiplyScalar(0.03), [normal]);
   const ringRef = useRef<Mesh>(null);
   const pointerStartRef = useRef<{ x: number; y: number } | null>(null);
   const draggingRef = useRef(false);
@@ -426,21 +424,6 @@ function MiniNodeMarker({
           toneMapped={false}
         />
       </mesh>
-      <Billboard position={labelPos} follow lockX={false} lockY={false} lockZ={false}>
-        <Text
-          fontSize={activeOrHovered ? 0.026 : 0.022}
-          color="white"
-          anchorX="center"
-          anchorY="middle"
-          maxWidth={0.42}
-          textAlign="center"
-          outlineColor="#020617"
-          outlineWidth={0.009}
-          fillOpacity={activeOrHovered ? 0.98 : 0.9}
-        >
-          {title}
-        </Text>
-      </Billboard>
     </group>
   );
 }
@@ -463,14 +446,17 @@ function MiniNodeSignalLink({
   isActive: boolean;
 }) {
   const ACTIVE_WAVE_DOT_COUNT = 7;
-  const lineRef = useRef<any>(null);
+  const lineRef = useRef<Line2 | null>(null);
   const pulseARef = useRef<Mesh>(null);
   const pulseBRef = useRef<Mesh>(null);
   const receiverRingRef = useRef<Mesh>(null);
   const receiverCoreRef = useRef<Mesh>(null);
   const waveDotsRef = useRef<Array<Mesh | null>>([]);
   const pulseColor = useMemo(
-    () => vividAccentForPin(accentColor, isActive).clone().lerp(new Color("white"), 0.08),
+    () =>
+      vividAccentForPin(accentColor, isActive)
+        .clone()
+        .lerp(new Color("white"), isActive ? 0.34 : 0.08),
     [accentColor, isActive],
   );
   const receiverBasePoint = useMemo(
@@ -506,7 +492,7 @@ function MiniNodeSignalLink({
   const camDirRef = useRef(new Vector3());
   const upAxis = useMemo(() => new Vector3(0, 1, 0), []);
   const altAxis = useMemo(() => new Vector3(1, 0, 0), []);
-  const lineBaseOpacity = isActive ? 0.56 : 0.34;
+  const lineBaseOpacity = isActive ? 0.92 : 0.34;
 
   useFrame(({ clock, camera }) => {
     const speed = reducedMotion ? 0.1 : 0.22;
@@ -529,7 +515,8 @@ function MiniNodeSignalLink({
     const receiverVisible = receiverBasePoint.dot(camDirRef.current) > 0;
 
     if (lineRef.current?.material) {
-      lineRef.current.material.opacity = lineBaseOpacity * lineVisibility;
+      const activeVisibility = isActive ? Math.max(0.72, lineVisibility) : lineVisibility;
+      (lineRef.current.material as { opacity: number }).opacity = lineBaseOpacity * activeVisibility;
     }
 
     if (pulseARef.current) {
@@ -582,13 +569,23 @@ function MiniNodeSignalLink({
 
   return (
     <group>
+      {isActive ? (
+        <Line
+          points={pathPoints}
+          color={pulseColor}
+          transparent
+          opacity={0.3}
+          lineWidth={3.8}
+          depthWrite={false}
+        />
+      ) : null}
       <Line
         ref={lineRef}
         points={pathPoints}
         color={pulseColor}
         transparent
         opacity={lineBaseOpacity}
-        lineWidth={isActive ? 1.35 : 0.95}
+        lineWidth={isActive ? 2.45 : 0.95}
         depthWrite={false}
       />
       <mesh ref={pulseARef} raycast={() => null}>
@@ -719,7 +716,6 @@ export function GlobeNodes({
             <MiniNodeMarker
               key={miniNode.id}
               id={miniNode.id}
-              title={miniNode.title}
               latitude={miniNode.latitude}
               longitude={miniNode.longitude}
               isActive={activeProjectMiniNodeId === miniNode.id}
@@ -749,7 +745,6 @@ export function GlobeNodes({
             <MiniNodeMarker
               key={miniNode.id}
               id={miniNode.id}
-              title={miniNode.title}
               latitude={miniNode.latitude}
               longitude={miniNode.longitude}
               isActive={activeExperienceMiniNodeId === miniNode.id}

@@ -228,6 +228,8 @@ type ResumePanelProps = {
   splitViewPanelLeft?: string;
   /** Max width so the panel fits the remaining viewport. */
   splitViewPanelWidth?: string;
+  /** Center split-view panel on `splitViewPanelLeft` (e.g. `50%`). */
+  splitViewPanelCenter?: boolean;
   activeProjectMiniNodeId?: string | null;
   onSelectProjectMiniNode?: (miniNodeId: string) => void;
   scrollToBulletIndex?: number | null;
@@ -244,6 +246,7 @@ export function ResumePanel({
   splitViewPanelTop,
   splitViewPanelLeft,
   splitViewPanelWidth,
+  splitViewPanelCenter = false,
   activeProjectMiniNodeId = null,
   onSelectProjectMiniNode,
   scrollToBulletIndex = null,
@@ -320,6 +323,7 @@ export function ResumePanel({
         width: splitViewPanelWidth,
         right: "auto" as const,
         maxHeight: splitMaxHeight,
+        transform: splitViewPanelCenter ? "translateX(-50%)" : undefined,
       }
     : isSplitView
       ? { right: "2.75rem", top: splitTop, maxHeight: splitMaxHeight }

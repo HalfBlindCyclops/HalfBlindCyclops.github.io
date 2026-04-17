@@ -428,9 +428,20 @@ export function GlobeExperience() {
   const streamStartY = `${streamStartYPercent}%`;
   const RESUME_PANEL_LIFT_PCT = 4;
   const resumePanelTopPercent = Math.max(10, streamStartYPercent - RESUME_PANEL_LIFT_PCT);
-  const splitPanelTop = `calc(${resumePanelTopPercent}% + 1rem)`;
-  const splitPanelLeft = `calc(${CONNECTOR_LINE_END_PCT}% + 0.5rem)`;
-  const splitPanelWidth = `min(52rem, calc(100% - ${CONNECTOR_LINE_END_PCT}% - 1.25rem))`;
+  const splitPanelBaseTop = `calc(${resumePanelTopPercent}% + 1rem)`;
+  const useTopTabStackLayout = isSplitView && (isProjectsSelected || isExperienceSelected);
+  // Keep the split-view panel from colliding with open mini-node trays near the top nav.
+  const splitPanelTop = isProjectsSelected
+    ? `max(${splitPanelBaseTop}, 20.5rem)`
+    : isExperienceSelected
+      ? `max(${splitPanelBaseTop}, 19rem)`
+      : splitPanelBaseTop;
+  const splitPanelLeft = useTopTabStackLayout
+    ? "50%"
+    : `calc(${CONNECTOR_LINE_END_PCT}% + 0.5rem)`;
+  const splitPanelWidth = useTopTabStackLayout
+    ? "min(58rem, calc(100% - 2rem))"
+    : `min(52rem, calc(100% - ${CONNECTOR_LINE_END_PCT}% - 1.25rem))`;
   // Horizontal beam is h-[2px] with top at streamStartY — center is 1px lower (same coords as SVG viewBox %).
   const streamJunctionYPercent = Math.min(
     100,
@@ -568,7 +579,7 @@ export function GlobeExperience() {
                 activeProjectMiniNodeId={activeProjectMiniNodeId}
                 activeExperienceMiniNodeId={activeExperienceMiniNodeId}
                 showProjectMiniNodes
-                showExperienceMiniNodes={isExperienceSelected}
+                showExperienceMiniNodes
                 reducedMotion={Boolean(prefersReducedMotion)}
                 accentColor={ACCENT_COLOR_HEX}
                 onSelect={onSelectNode}
@@ -670,16 +681,21 @@ export function GlobeExperience() {
                     <AnimatePresence>
                       {isExperienceSelected ? (
                         <motion.div
-                          className="pointer-events-auto absolute right-0 top-full mt-2 w-[min(96vw,36rem)] overflow-y-auto rounded-2xl border border-white/20 bg-slate-950/82 p-3 backdrop-blur-md md:w-[34rem]"
+                          className="pointer-events-auto absolute right-0 top-full mt-3 w-[min(96vw,36rem)] overflow-y-auto rounded-3xl border border-white/20 bg-slate-950/78 p-3.5 shadow-[0_20px_60px_rgba(2,6,23,0.55)] backdrop-blur-xl md:w-[34rem]"
                           initial={{ opacity: 0, y: -8, x: 10 }}
                           animate={{ opacity: 1, y: 0, x: 0 }}
                           exit={{ opacity: 0, y: -6, x: 8 }}
                           transition={{ duration: 0.2, ease: "easeOut" }}
                         >
-                          <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-300">
-                            Experience nodes
+                          <div className="mb-3 flex items-center justify-between px-1">
+                            <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-200">
+                              Experience nodes
+                            </div>
+                            <div className="rounded-full border border-white/20 bg-white/5 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.12em] text-slate-300">
+                              {experienceMiniNodes.length} total
+                            </div>
                           </div>
-                          <div className="grid w-full grid-cols-5 gap-2">
+                          <div className="grid w-full grid-cols-2 gap-2.5 md:grid-cols-4">
                             {experienceMiniNodes.map((miniNode) => {
                               const isMiniActive = activeExperienceMiniNodeId === miniNode.id;
                               return (
@@ -687,17 +703,18 @@ export function GlobeExperience() {
                                   key={miniNode.id}
                                   type="button"
                                   onClick={() => onSelectExperienceMiniNode(miniNode.id)}
-                                  className="rounded-lg border px-3 py-2 text-left text-xs font-medium transition md:text-[0.8rem]"
+                                  className="rounded-xl border px-3 py-2.5 text-left text-xs font-medium leading-snug shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] transition duration-200 hover:-translate-y-0.5 hover:brightness-110 md:text-[0.8rem]"
                                   style={
                                     isMiniActive
                                       ? {
-                                          borderColor: colorToRgba(ACCENT_COLOR_HEX, 0.7),
-                                          backgroundColor: colorToRgba(ACCENT_COLOR_HEX, 0.16),
-                                          color: "rgb(236, 254, 255)",
+                                          borderColor: colorToRgba(ACCENT_COLOR_HEX, 0.88),
+                                          backgroundColor: colorToRgba(ACCENT_COLOR_HEX, 0.22),
+                                          color: "rgb(240, 249, 255)",
+                                          boxShadow: `0 0 0 1px ${colorToRgba(ACCENT_COLOR_HEX, 0.35)} inset, 0 10px 28px ${colorToRgba(ACCENT_COLOR_HEX, 0.18)}`,
                                         }
                                       : {
-                                          borderColor: "rgba(148, 163, 184, 0.28)",
-                                          backgroundColor: "rgba(15, 23, 42, 0.55)",
+                                          borderColor: "rgba(148, 163, 184, 0.32)",
+                                          backgroundColor: "rgba(15, 23, 42, 0.72)",
                                           color: "rgb(226, 232, 240)",
                                         }
                                   }
@@ -718,16 +735,21 @@ export function GlobeExperience() {
           <AnimatePresence>
             {isProjectsSelected ? (
               <motion.div
-                className="pointer-events-auto max-h-[min(70dvh,30rem)] w-[min(96vw,46rem)] overflow-y-auto rounded-2xl border border-white/20 bg-slate-950/82 p-3 backdrop-blur-md md:absolute md:left-full md:top-0 md:ml-3 md:max-h-[calc(100dvh-7rem)] md:w-[42rem]"
+                className="pointer-events-auto max-h-[min(70dvh,30rem)] w-[min(96vw,46rem)] overflow-y-auto rounded-3xl border border-white/20 bg-slate-950/78 p-3.5 shadow-[0_20px_60px_rgba(2,6,23,0.55)] backdrop-blur-xl md:absolute md:left-full md:top-0 md:ml-3 md:max-h-[calc(100dvh-7rem)] md:w-[42rem]"
                 initial={{ opacity: 0, y: -8, x: -10 }}
                 animate={{ opacity: 1, y: 0, x: 0 }}
                 exit={{ opacity: 0, y: -6, x: -8 }}
                 transition={{ duration: 0.2, ease: "easeOut" }}
               >
-                <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-300">
-                  Project nodes
+                <div className="mb-3 flex items-center justify-between px-1">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-200">
+                    Project nodes
+                  </div>
+                  <div className="rounded-full border border-white/20 bg-white/5 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.12em] text-slate-300">
+                    {projectMiniNodes.length} total
+                  </div>
                 </div>
-                <div className="grid grid-cols-4 gap-2">
+                <div className="grid grid-cols-2 gap-2.5 md:grid-cols-4">
                   {projectMiniNodes.map((miniNode) => {
                     const isActive = activeProjectMiniNodeId === miniNode.id;
                     return (
@@ -735,17 +757,18 @@ export function GlobeExperience() {
                         key={miniNode.id}
                         type="button"
                         onClick={() => onSelectProjectMiniNode(miniNode.id)}
-                        className="rounded-lg border px-3 py-2 text-left text-xs font-medium transition md:text-[0.8rem]"
+                        className="rounded-xl border px-3 py-2.5 text-left text-xs font-medium leading-snug shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] transition duration-200 hover:-translate-y-0.5 hover:brightness-110 md:text-[0.8rem]"
                         style={
                           isActive
                             ? {
-                                borderColor: colorToRgba(ACCENT_COLOR_HEX, 0.7),
-                                backgroundColor: colorToRgba(ACCENT_COLOR_HEX, 0.16),
-                                color: "rgb(236, 254, 255)",
+                                borderColor: colorToRgba(ACCENT_COLOR_HEX, 0.88),
+                                backgroundColor: colorToRgba(ACCENT_COLOR_HEX, 0.22),
+                                color: "rgb(240, 249, 255)",
+                                boxShadow: `0 0 0 1px ${colorToRgba(ACCENT_COLOR_HEX, 0.35)} inset, 0 10px 28px ${colorToRgba(ACCENT_COLOR_HEX, 0.18)}`,
                               }
                             : {
-                                borderColor: "rgba(148, 163, 184, 0.28)",
-                                backgroundColor: "rgba(15, 23, 42, 0.55)",
+                                borderColor: "rgba(148, 163, 184, 0.32)",
+                                backgroundColor: "rgba(15, 23, 42, 0.72)",
                                 color: "rgb(226, 232, 240)",
                               }
                         }
@@ -820,6 +843,7 @@ export function GlobeExperience() {
         splitViewPanelTop={splitPanelTop}
         splitViewPanelLeft={splitPanelLeft}
         splitViewPanelWidth={splitPanelWidth}
+        splitViewPanelCenter={useTopTabStackLayout}
         activeProjectMiniNodeId={activeProjectMiniNodeId}
         onSelectProjectMiniNode={onSelectProjectMiniNode}
         scrollToBulletIndex={pendingExperienceScrollIndex}
