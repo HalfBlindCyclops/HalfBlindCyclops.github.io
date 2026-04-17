@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Color, Mesh, Quaternion, Vector3 } from "three";
-import { useCursor } from "@react-three/drei";
+import { Billboard, Text, useCursor } from "@react-three/drei";
 import { useFrame, type ThreeEvent } from "@react-three/fiber";
+import { projectMiniNodes } from "@/data/projectMiniNodes";
 import { resumeNodes, type ResumeNode } from "@/data/resumeNodes";
 import { latLonToVector3 } from "@/lib/geo";
 
@@ -26,9 +27,12 @@ function stemColorFromAccent(base: Color): Color {
 
 type GlobeNodesProps = {
   activeNodeId: string | null;
+  activeProjectMiniNodeId: string | null;
+  showProjectMiniNodes: boolean;
   reducedMotion: boolean;
   accentColor?: string;
   onSelect: (node: ResumeNode) => void;
+  onSelectProjectMiniNode: (miniNodeId: string) => void;
 };
 
 type ActiveRingSpec = {
@@ -309,14 +313,149 @@ function NodeMarker({
   );
 }
 
+function ProjectMiniNodeMarker({
+  id,
+  title,
+  latitude,
+  longitude,
+  isActive,
+  accentColor,
+  reducedMotion,
+  onClick,
+  onHoverIntent,
+}: {
+  id: string;
+  title: string;
+  latitude: number;
+  longitude: number;
+  isActive: boolean;
+  accentColor: Color;
+  reducedMotion: boolean;
+  onClick: () => void;
+  onHoverIntent: (id: string | null) => void;
+}) {
+  const [hovered, setHovered] = useState(false);
+  const point = useMemo(() => latLonToVector3(latitude, longitude, 1.02), [latitude, longitude]);
+  const normal = useMemo(() => point.clone().normalize(), [point]);
+  const markerPos = useMemo(() => point.clone().addScaledVector(normal, 0.0135), [normal, point]);
+  const labelPos = useMemo(() => normal.clone().multiplyScalar(0.03), [normal]);
+  const ringRef = useRef<Mesh>(null);
+  const pointerStartRef = useRef<{ x: number; y: number } | null>(null);
+  const draggingRef = useRef(false);
+
+  const activeOrHovered = isActive || hovered;
+
+  useEffect(() => {
+    if (hovered) {
+      onHoverIntent(id);
+    }
+    return () => {
+      onHoverIntent(null);
+    };
+  }, [hovered, id, onHoverIntent]);
+
+  useFrame(({ clock }) => {
+    const ring = ringRef.current;
+    if (!ring) return;
+    if (reducedMotion) {
+      ring.scale.setScalar(activeOrHovered ? 1.08 : 1);
+      return;
+    }
+    const pulse = 1 + Math.sin(clock.elapsedTime * 2.8) * 0.08;
+    ring.scale.setScalar(pulse * (activeOrHovered ? 1.1 : 1));
+  });
+
+  const handlePointerDown = (event: ThreeEvent<PointerEvent>) => {
+    event.stopPropagation();
+    pointerStartRef.current = { x: event.clientX, y: event.clientY };
+    draggingRef.current = false;
+  };
+
+  const handlePointerMove = (event: ThreeEvent<PointerEvent>) => {
+    if (!pointerStartRef.current) return;
+    const dx = event.clientX - pointerStartRef.current.x;
+    const dy = event.clientY - pointerStartRef.current.y;
+    if (dx * dx + dy * dy > 25) draggingRef.current = true;
+  };
+
+  const handlePointerUp = (event: ThreeEvent<PointerEvent>) => {
+    event.stopPropagation();
+    const wasDragging = draggingRef.current;
+    pointerStartRef.current = null;
+    draggingRef.current = false;
+    if (!wasDragging) onClick();
+  };
+
+  return (
+    <group position={markerPos}>
+      <mesh
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerEnter={() => setHovered(true)}
+        onPointerLeave={() => setHovered(false)}
+      >
+        <sphereGeometry args={[0.026, 14, 14]} />
+        <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+      </mesh>
+      <mesh>
+        <sphereGeometry args={[activeOrHovered ? 0.0085 : 0.007, 14, 14]} />
+        <meshBasicMaterial
+          color={vividAccentForPin(accentColor, activeOrHovered)}
+          toneMapped={false}
+          transparent
+          opacity={activeOrHovered ? 1 : 0.88}
+        />
+      </mesh>
+      <mesh
+        ref={ringRef}
+        rotation={[Math.PI / 2, 0, 0]}
+        position={[0, -0.001, 0]}
+        raycast={() => null}
+      >
+        <torusGeometry args={[0.012, 0.0012, 10, 32]} />
+        <meshBasicMaterial
+          color={vividAccentForPin(accentColor, activeOrHovered)}
+          transparent
+          opacity={activeOrHovered ? 0.92 : 0.72}
+          depthWrite={false}
+          toneMapped={false}
+        />
+      </mesh>
+      <Billboard position={labelPos} follow lockX={false} lockY={false} lockZ={false}>
+        <Text
+          fontSize={activeOrHovered ? 0.026 : 0.022}
+          color="white"
+          anchorX="center"
+          anchorY="middle"
+          maxWidth={0.42}
+          textAlign="center"
+          outlineColor="#020617"
+          outlineWidth={0.009}
+          fillOpacity={activeOrHovered ? 0.98 : 0.9}
+        >
+          {title}
+        </Text>
+      </Billboard>
+    </group>
+  );
+}
+
 export function GlobeNodes({
   activeNodeId,
+  activeProjectMiniNodeId,
+  showProjectMiniNodes,
   reducedMotion,
   accentColor,
   onSelect,
+  onSelectProjectMiniNode,
 }: GlobeNodesProps) {
   const hoverRafRef = useRef<number | null>(null);
   const [globePointer, setGlobePointer] = useState(false);
+  const miniAccent = useMemo(
+    () => new Color().setStyle(accentColor ?? "#2dd4bf"),
+    [accentColor],
+  );
 
   const onHoverIntent = useCallback((id: string | null) => {
     if (hoverRafRef.current !== null) {
@@ -355,6 +494,22 @@ export function GlobeNodes({
           onHoverIntent={onHoverIntent}
         />
       ))}
+      {showProjectMiniNodes
+        ? projectMiniNodes.map((miniNode) => (
+            <ProjectMiniNodeMarker
+              key={miniNode.id}
+              id={miniNode.id}
+              title={miniNode.title}
+              latitude={miniNode.latitude}
+              longitude={miniNode.longitude}
+              isActive={activeProjectMiniNodeId === miniNode.id}
+              accentColor={miniAccent}
+              reducedMotion={reducedMotion}
+              onClick={() => onSelectProjectMiniNode(miniNode.id)}
+              onHoverIntent={onHoverIntent}
+            />
+          ))
+        : null}
     </group>
   );
 }

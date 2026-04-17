@@ -9,6 +9,7 @@ import {
   type CSSProperties,
   type ReactNode,
 } from "react";
+import { getProjectMiniNodeId } from "@/data/projectMiniNodes";
 import type { ResumeNode, ResumeProjectSubsections } from "@/data/resumeNodes";
 import { ACCENT_COLOR_HEX, colorToRgba } from "@/lib/colorFormat";
 
@@ -36,10 +37,34 @@ function renderInlineBold(text: string): ReactNode[] {
 function StructuredBullet({
   bullet,
   index,
+  onClick,
+  isActive = false,
 }: {
   bullet: string;
   index: number;
+  onClick?: () => void;
+  isActive?: boolean;
 }) {
+  const clickable = Boolean(onClick);
+  const itemClassName = clickable
+    ? "group w-full rounded-xl border px-3 py-2 text-left transition hover:border-white/35 hover:bg-white/5"
+    : "";
+  const itemStyle = clickable
+    ? isActive
+      ? {
+          borderColor: colorToRgba(ACCENT_COLOR_HEX, 0.58),
+          backgroundColor: colorToRgba(ACCENT_COLOR_HEX, 0.12),
+        }
+      : {
+          borderColor: "rgba(148, 163, 184, 0.28)",
+          backgroundColor: "rgba(15, 23, 42, 0.28)",
+        }
+    : undefined;
+  const dotStyle = {
+    backgroundColor: ACCENT_COLOR_HEX,
+    boxShadow: clickable && isActive ? `0 0 10px ${colorToRgba(ACCENT_COLOR_HEX, 0.55)}` : "none",
+  };
+
   const colon = bullet.indexOf(": ");
   if (colon > 0 && colon < bullet.length - 2) {
     const head = bullet.slice(0, colon);
@@ -51,14 +76,25 @@ function StructuredBullet({
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.15 + index * 0.06, duration: 0.24 }}
       >
-        <span
-          className="mt-2.5 h-2 w-2 shrink-0 rounded-full"
-          style={{ backgroundColor: ACCENT_COLOR_HEX }}
-        />
-        <div className="min-w-0 flex-1">
-          <p className={bulletLeadClass}>{head}</p>
-          <p className={`mt-2 ${bulletDetailClass}`}>{renderInlineBold(tail)}</p>
-        </div>
+        {clickable ? (
+          <button type="button" onClick={onClick} className={itemClassName} style={itemStyle}>
+            <div className="flex items-start gap-3">
+              <span className="mt-2.5 h-2 w-2 shrink-0 rounded-full" style={dotStyle} />
+              <div className="min-w-0 flex-1">
+                <p className={bulletLeadClass}>{head}</p>
+                <p className={`mt-2 ${bulletDetailClass}`}>{renderInlineBold(tail)}</p>
+              </div>
+            </div>
+          </button>
+        ) : (
+          <>
+            <span className="mt-2.5 h-2 w-2 shrink-0 rounded-full" style={dotStyle} />
+            <div className="min-w-0 flex-1">
+              <p className={bulletLeadClass}>{head}</p>
+              <p className={`mt-2 ${bulletDetailClass}`}>{renderInlineBold(tail)}</p>
+            </div>
+          </>
+        )}
       </motion.li>
     );
   }
@@ -69,11 +105,19 @@ function StructuredBullet({
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.15 + index * 0.06, duration: 0.24 }}
     >
-      <span
-        className="mt-2.5 h-2 w-2 shrink-0 rounded-full"
-        style={{ backgroundColor: ACCENT_COLOR_HEX }}
-      />
-      <span className={bulletDetailClass}>{renderInlineBold(bullet)}</span>
+      {clickable ? (
+        <button type="button" onClick={onClick} className={itemClassName} style={itemStyle}>
+          <div className="flex items-start gap-3">
+            <span className="mt-2.5 h-2 w-2 shrink-0 rounded-full" style={dotStyle} />
+            <span className={bulletDetailClass}>{renderInlineBold(bullet)}</span>
+          </div>
+        </button>
+      ) : (
+        <>
+          <span className="mt-2.5 h-2 w-2 shrink-0 rounded-full" style={dotStyle} />
+          <span className={bulletDetailClass}>{renderInlineBold(bullet)}</span>
+        </>
+      )}
     </motion.li>
   );
 }
@@ -115,8 +159,17 @@ function ProjectsScrollDownCue() {
   );
 }
 
-function ProjectSubsectionsList({ subsections }: { subsections: ResumeProjectSubsections }) {
+function ProjectSubsectionsList({
+  subsections,
+  activeProjectMiniNodeId,
+  onSelectProjectMiniNode,
+}: {
+  subsections: ResumeProjectSubsections;
+  activeProjectMiniNodeId: string | null;
+  onSelectProjectMiniNode?: (miniNodeId: string) => void;
+}) {
   const groups = PROJECT_SUBSECTION_ORDER.map((key) => ({
+    key,
     title: PROJECT_SUBSECTION_LABELS[key],
     bullets: subsections[key],
   })).filter((g) => g.bullets.length > 0);
@@ -132,9 +185,22 @@ function ProjectSubsectionsList({ subsections }: { subsections: ResumeProjectSub
             {group.title}
           </h3>
           <ul className="mt-4 space-y-5 md:mt-5 md:space-y-6">
-            {group.bullets.map((bullet, index) => (
-              <StructuredBullet key={bullet} bullet={bullet} index={index} />
-            ))}
+            {group.bullets.map((bullet, index) => {
+              const miniNodeId = getProjectMiniNodeId(group.key, index);
+              return (
+                <StructuredBullet
+                  key={bullet}
+                  bullet={bullet}
+                  index={index}
+                  onClick={
+                    onSelectProjectMiniNode && miniNodeId
+                      ? () => onSelectProjectMiniNode(miniNodeId)
+                      : undefined
+                  }
+                  isActive={activeProjectMiniNodeId !== null && activeProjectMiniNodeId === miniNodeId}
+                />
+              );
+            })}
           </ul>
         </section>
       ))}
@@ -158,6 +224,8 @@ type ResumePanelProps = {
   splitViewPanelLeft?: string;
   /** Max width so the panel fits the remaining viewport. */
   splitViewPanelWidth?: string;
+  activeProjectMiniNodeId?: string | null;
+  onSelectProjectMiniNode?: (miniNodeId: string) => void;
 };
 
 export function ResumePanel({
@@ -170,6 +238,8 @@ export function ResumePanel({
   splitViewPanelTop,
   splitViewPanelLeft,
   splitViewPanelWidth,
+  activeProjectMiniNodeId = null,
+  onSelectProjectMiniNode,
 }: ResumePanelProps) {
   const scrollBodyRef = useRef<HTMLDivElement>(null);
   const [hasVerticalScroll, setHasVerticalScroll] = useState(false);
@@ -341,7 +411,11 @@ export function ResumePanel({
               style={scrollBodyAccent}
             >
               {node.id === "projects" && node.projectSubsections ? (
-                <ProjectSubsectionsList subsections={node.projectSubsections} />
+                <ProjectSubsectionsList
+                  subsections={node.projectSubsections}
+                  activeProjectMiniNodeId={activeProjectMiniNodeId}
+                  onSelectProjectMiniNode={onSelectProjectMiniNode}
+                />
               ) : (
                 <ul className="space-y-5 md:space-y-6">
                   {node.bullets.map((bullet, index) =>

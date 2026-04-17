@@ -26,6 +26,7 @@ import {
 import { ProfileContactHub } from "@/components/ui/ProfileContactHub";
 import { ResumePanel } from "@/components/ui/ResumePanel";
 import { SceneLoader } from "@/components/ui/SceneLoader";
+import { projectMiniNodes } from "@/data/projectMiniNodes";
 import { INITIAL_GLOBE_FOCUS, resumeNodes, type ResumeNode } from "@/data/resumeNodes";
 import { ACCENT_COLOR_HEX, colorToRgba } from "@/lib/colorFormat";
 import { useCanvasScreenRect } from "@/lib/useCanvasScreenRect";
@@ -267,6 +268,7 @@ function CursorLatLonTracker({
 
 export function GlobeExperience() {
   const [selectedNode, setSelectedNode] = useState<ResumeNode | null>(null);
+  const [activeProjectMiniNodeId, setActiveProjectMiniNodeId] = useState<string | null>(null);
   const [sceneMode, setSceneMode] = useState<SceneMode>("idle");
   const sectionRef = useRef<HTMLElement | null>(null);
   const [sectionHeight, setSectionHeight] = useState(900);
@@ -283,6 +285,13 @@ export function GlobeExperience() {
   const isMobile = useMobileLayout();
 
   const activeNodeId = selectedNode?.id ?? null;
+  const isProjectsSelected = selectedNode?.id === "projects";
+  const activeProjectMiniNode =
+    isProjectsSelected && activeProjectMiniNodeId
+      ? projectMiniNodes.find((node) => node.id === activeProjectMiniNodeId) ?? null
+      : null;
+  const focusLatitude = activeProjectMiniNode?.latitude ?? selectedNode?.latitude ?? null;
+  const focusLongitude = activeProjectMiniNode?.longitude ?? selectedNode?.longitude ?? null;
   const showPanel =
     selectedNode !== null && (sceneMode === "focusing" || sceneMode === "focused")
       ? selectedNode
@@ -305,7 +314,7 @@ export function GlobeExperience() {
     connectorPathsActive;
   /** Lower % = higher on screen. Same pin-based beam + same panel lift offset for every resume tab vs the beam. */
   const streamStartYPercent = selectedNode
-    ? Math.max(12, Math.min(32, 26 - (selectedNode.latitude / 90) * 18))
+    ? Math.max(12, Math.min(32, 26 - ((focusLatitude ?? selectedNode.latitude) / 90) * 18))
     : 22;
   const streamStartY = `${streamStartYPercent}%`;
   const RESUME_PANEL_LIFT_PCT = 4;
@@ -350,6 +359,7 @@ export function GlobeExperience() {
       // Phase 2: commit node change on next frame.
       switchRafRef.current = requestAnimationFrame(() => {
         setSelectedNode(node);
+        if (node.id !== "projects") setActiveProjectMiniNodeId(null);
         setSceneMode("focusing");
       });
       return;
@@ -358,11 +368,26 @@ export function GlobeExperience() {
     // Initial selection.
     setConnectorPathsActive(false);
     setSelectedNode(node);
+    if (node.id !== "projects") setActiveProjectMiniNodeId(null);
     setSceneMode("focusing");
+  };
+
+  const onSelectProjectMiniNode = (miniNodeId: string) => {
+    if (selectedNode?.id !== "projects") {
+      const projectsNode = resumeNodes.find((node) => node.id === "projects");
+      if (!projectsNode) return;
+      setConnectorPathsActive(false);
+      setSelectedNode(projectsNode);
+      setSceneMode("focusing");
+    } else {
+      setSceneMode("focusing");
+    }
+    setActiveProjectMiniNodeId(miniNodeId);
   };
 
   const onClosePanel = () => {
     setConnectorPathsActive(false);
+    setActiveProjectMiniNodeId(null);
     setSelectedNode(null);
     // Lerp camera back to centered overview; onReturnSettled clears returning → idle.
     setSceneMode("returning");
@@ -410,14 +435,17 @@ export function GlobeExperience() {
               <Atmosphere sunDirection={SUN_DIRECTION} />
               <GlobeNodes
                 activeNodeId={activeNodeId}
+                activeProjectMiniNodeId={activeProjectMiniNodeId}
+                showProjectMiniNodes={isProjectsSelected}
                 reducedMotion={Boolean(prefersReducedMotion)}
                 accentColor={ACCENT_COLOR_HEX}
                 onSelect={onSelectNode}
+                onSelectProjectMiniNode={onSelectProjectMiniNode}
               />
             </group>
             <CameraRig
-              latitude={selectedNode?.latitude ?? null}
-              longitude={selectedNode?.longitude ?? null}
+              latitude={focusLatitude}
+              longitude={focusLongitude}
               homeLatitude={INITIAL_GLOBE_FOCUS.latitude}
               homeLongitude={INITIAL_GLOBE_FOCUS.longitude}
               mode={sceneMode}
@@ -434,8 +462,8 @@ export function GlobeExperience() {
               }}
             />
             <ConnectorAnchorTracker
-              latitude={selectedNode?.latitude ?? null}
-              longitude={selectedNode?.longitude ?? null}
+              latitude={focusLatitude}
+              longitude={focusLongitude}
               onChange={setConnectorAnchor}
             />
             <CursorLatLonTracker onChange={setCursorLatLon} />
@@ -567,6 +595,8 @@ export function GlobeExperience() {
         splitViewPanelTop={splitPanelTop}
         splitViewPanelLeft={splitPanelLeft}
         splitViewPanelWidth={splitPanelWidth}
+        activeProjectMiniNodeId={activeProjectMiniNodeId}
+        onSelectProjectMiniNode={onSelectProjectMiniNode}
       />
       <SceneLoader />
     </section>
