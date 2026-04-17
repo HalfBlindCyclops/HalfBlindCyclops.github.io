@@ -84,3 +84,58 @@ export function sunDirectionForSunsetAt(
   }
   return [L.x, L.y, L.z];
 }
+
+function normalizeDegrees360(value: number): number {
+  const wrapped = value % 360;
+  return wrapped < 0 ? wrapped + 360 : wrapped;
+}
+
+function normalizeLongitude180(value: number): number {
+  const wrapped = ((value + 180) % 360 + 360) % 360 - 180;
+  return wrapped === -180 ? 180 : wrapped;
+}
+
+/**
+ * Approximate subsolar point (lat/lon where sun is directly overhead) for a UTC date.
+ * This is sufficient for real-time visual day/night shading on the globe.
+ */
+export function subsolarPointAt(date: Date): { latitude: number; longitude: number } {
+  const jd = date.getTime() / 86400000 + 2440587.5;
+  const n = jd - 2451545.0;
+
+  const meanLongitude = normalizeDegrees360(280.460 + 0.9856474 * n);
+  const meanAnomaly = normalizeDegrees360(357.528 + 0.9856003 * n);
+  const meanAnomalyRad = (meanAnomaly * Math.PI) / 180;
+
+  const eclipticLongitude =
+    meanLongitude +
+    1.915 * Math.sin(meanAnomalyRad) +
+    0.02 * Math.sin(2 * meanAnomalyRad);
+  const eclipticLongitudeRad = (eclipticLongitude * Math.PI) / 180;
+  const obliquityRad = ((23.439 - 0.0000004 * n) * Math.PI) / 180;
+
+  const rightAscensionRad = Math.atan2(
+    Math.cos(obliquityRad) * Math.sin(eclipticLongitudeRad),
+    Math.cos(eclipticLongitudeRad),
+  );
+  const declinationRad = Math.asin(Math.sin(obliquityRad) * Math.sin(eclipticLongitudeRad));
+
+  const rightAscensionDeg = normalizeDegrees360((rightAscensionRad * 180) / Math.PI);
+  const declinationDeg = (declinationRad * 180) / Math.PI;
+  const gmstDeg = normalizeDegrees360(280.46061837 + 360.98564736629 * n);
+
+  const subsolarLongitudeDeg = normalizeLongitude180(rightAscensionDeg - gmstDeg);
+
+  return {
+    latitude: declinationDeg,
+    longitude: subsolarLongitudeDeg,
+  };
+}
+
+/**
+ * Toward-sun direction in scene world space for the provided UTC date/time.
+ */
+export function sunDirectionForDate(date: Date): [number, number, number] {
+  const subsolar = subsolarPointAt(date);
+  return sunDirectionInSceneWorld(subsolar.latitude, subsolar.longitude);
+}

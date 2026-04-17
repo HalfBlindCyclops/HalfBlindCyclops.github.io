@@ -16,6 +16,9 @@ function basePathFromEnv(): string | undefined {
 const nextConfig: NextConfig = {
   output: "export",
   images: { unoptimized: true },
+  experimental: {
+    webVitalsAttribution: ["LCP", "INP", "CLS"],
+  },
   basePath: basePathFromEnv(),
 };
 

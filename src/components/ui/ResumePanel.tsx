@@ -277,13 +277,20 @@ export function ResumePanel({
 
   useLayoutEffect(() => {
     if (!node) {
-      setHasVerticalScroll(false);
-      setShowProjectsScrollCue(false);
-      return;
+      const id = requestAnimationFrame(() => {
+        setHasVerticalScroll(false);
+        setShowProjectsScrollCue(false);
+      });
+      return () => cancelAnimationFrame(id);
     }
     const el = scrollBodyRef.current;
-    if (!el) return;
-    updateScrollMetrics();
+    if (!el) {
+      const id = requestAnimationFrame(() => {
+        setHasVerticalScroll(false);
+        setShowProjectsScrollCue(false);
+      });
+      return () => cancelAnimationFrame(id);
+    }
     let raf2 = 0;
     const raf1 = requestAnimationFrame(() => {
       updateScrollMetrics();

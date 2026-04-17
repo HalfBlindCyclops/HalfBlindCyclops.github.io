@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import dynamic from "next/dynamic";
 import {
   ACESFilmicToneMapping,
   Raycaster,
@@ -18,35 +19,32 @@ import { GlobeNodes } from "@/components/three/GlobeNodes";
 import { OrbitalSatellites } from "@/components/three/OrbitalSatellites";
 import { GlobeWeather } from "@/components/three/GlobeWeather";
 import { SpaceBackground } from "@/components/three/SpaceBackground";
+import { RuntimePerfMonitor } from "@/components/diagnostics/RuntimePerfMonitor";
 import {
   CONNECTOR_CONNECT_SEC,
   CONNECTOR_RETRACT_SEC,
   JUNCTION_X,
   ResumeConnector,
 } from "@/components/ui/ResumeConnector";
-import { ProfileContactHub } from "@/components/ui/ProfileContactHub";
-import { ResumePanel } from "@/components/ui/ResumePanel";
-import { SceneLoader } from "@/components/ui/SceneLoader";
 import { experienceMiniNodes } from "@/data/experienceMiniNodes";
 import { projectMiniNodes } from "@/data/projectMiniNodes";
 import { INITIAL_GLOBE_FOCUS, resumeNodes, type ResumeNode } from "@/data/resumeNodes";
 import { ACCENT_COLOR_HEX, colorToRgba } from "@/lib/colorFormat";
+import {
+  getFrameOverlaySnapshot,
+  setConnectorAnchor as setConnectorAnchorStore,
+  setCursorLatLon as setCursorLatLonStore,
+  subscribeFrameOverlay,
+  type ConnectorAnchor,
+  type CursorLatLon,
+} from "@/lib/frameOverlayStore";
 import { useCanvasScreenRect } from "@/lib/useCanvasScreenRect";
 import {
   GLOBE_GROUP_Y_ROTATION,
   LONGITUDE_ALIGNMENT_OFFSET_DEG,
   latLonToSceneWorld,
-  sunDirectionForSunsetAt,
+  sunDirectionForDate,
 } from "@/lib/geo";
-
-/** Terminator through 60°N; sun on horizon there. Longitude sets where that great circle crosses the map. */
-const SUN_TERMINATOR_AT: { lat: number; lon: number } = { lat: -60, lon: -90 };
-
-const SUN_DIRECTION = sunDirectionForSunsetAt(
-  SUN_TERMINATOR_AT.lat,
-  SUN_TERMINATOR_AT.lon,
-  INITIAL_GLOBE_FOCUS,
-);
 
 /** Horizontal beam + SVG junction. Panel anchors after line end. */
 const CONNECTOR_BAR_LEFT_PCT = JUNCTION_X;
@@ -54,17 +52,6 @@ const CONNECTOR_BAR_LEFT_PCT = JUNCTION_X;
 const CONNECTOR_BAR_WIDTH_PCT = 13;
 const CONNECTOR_LINE_END_PCT = CONNECTOR_BAR_LEFT_PCT + CONNECTOR_BAR_WIDTH_PCT;
 type SceneMode = "idle" | "focusing" | "focused" | "returning";
-
-type ConnectorAnchor = {
-  xPercent: number;
-  yPercent: number;
-  visible: boolean;
-};
-
-type CursorLatLon = {
-  latitude: number | null;
-  longitude: number | null;
-};
 
 type MiniDetailInfo = {
   title: string;
@@ -74,6 +61,18 @@ type MiniDetailInfo = {
 };
 
 const CONNECTOR_ANCHOR_HIDDEN_KEY = "__hidden__";
+const ProfileContactHub = dynamic(
+  () => import("@/components/ui/ProfileContactHub").then((m) => m.ProfileContactHub),
+  { loading: () => null },
+);
+const ResumePanel = dynamic(
+  () => import("@/components/ui/ResumePanel").then((m) => m.ResumePanel),
+  { loading: () => null },
+);
+const SceneLoader = dynamic(
+  () => import("@/components/ui/SceneLoader").then((m) => m.SceneLoader),
+  { loading: () => null },
+);
 
 function ConnectorAnchorTracker({
   latitude,
@@ -332,29 +331,117 @@ function MiniNodeDetailPanel({
   );
 }
 
+function CursorReadout() {
+  const { cursor } = useSyncExternalStore(
+    subscribeFrameOverlay,
+    getFrameOverlaySnapshot,
+    getFrameOverlaySnapshot,
+  );
+  return (
+    <div className="pointer-events-auto absolute bottom-4 left-4 z-[52] flex max-w-[calc(100vw-2rem)] flex-col gap-3 md:bottom-8 md:left-8 md:max-w-[calc(100vw-4rem)]">
+      <div className="w-[13.5rem] shrink-0 rounded-lg border border-white/20 bg-slate-950/80 px-3 py-2 text-xs backdrop-blur-md md:text-sm">
+        {cursor.latitude !== null && cursor.longitude !== null ? (
+          <span style={{ color: ACCENT_COLOR_HEX }}>
+            Lat {cursor.latitude.toFixed(2)}°, Lon {cursor.longitude.toFixed(2)}°
+          </span>
+        ) : (
+          <span className="font-medium text-red-400">N/A</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ConnectorOverlay({
+  selectedNode,
+  showConnectorLine,
+  connectorPathsActive,
+  streamJunctionYPercent,
+  streamStartY,
+  reducedMotion,
+}: {
+  selectedNode: ResumeNode | null;
+  showConnectorLine: boolean;
+  connectorPathsActive: boolean;
+  streamJunctionYPercent: number;
+  streamStartY: string;
+  reducedMotion: boolean;
+}) {
+  const { connector } = useSyncExternalStore(
+    subscribeFrameOverlay,
+    getFrameOverlaySnapshot,
+    getFrameOverlaySnapshot,
+  );
+
+  return (
+    <AnimatePresence>
+      {selectedNode && (
+        <motion.div
+          className="pointer-events-none absolute inset-0 z-20 hidden md:block"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.25 }}
+        >
+          <AnimatePresence>
+            {showConnectorLine && connector.visible && (
+              <ResumeConnector
+                key="resume-connector"
+                pinX={connector.xPercent}
+                pinY={connector.yPercent}
+                yJunction={streamJunctionYPercent}
+                reducedMotion={reducedMotion}
+                pathsActive
+              />
+            )}
+          </AnimatePresence>
+          <motion.div
+            key={selectedNode.id}
+            className="absolute h-[2px] rounded-full"
+            style={{
+              top: streamStartY,
+              left: `${CONNECTOR_BAR_LEFT_PCT}%`,
+              width: `${CONNECTOR_BAR_WIDTH_PCT}%`,
+              transformOrigin: "left center",
+              backgroundColor: ACCENT_COLOR_HEX,
+              boxShadow: `0 0 6px ${colorToRgba(ACCENT_COLOR_HEX, 0.5)}, 0 0 14px ${colorToRgba(ACCENT_COLOR_HEX, 0.25)}`,
+            }}
+            initial={{ scaleX: 0, opacity: 0 }}
+            animate={{ scaleX: showConnectorLine ? 1 : 0, opacity: showConnectorLine ? 1 : 0 }}
+            exit={{ scaleX: 0, opacity: 0 }}
+            transition={{
+              duration: connectorPathsActive ? CONNECTOR_CONNECT_SEC : CONNECTOR_RETRACT_SEC,
+              ease: [0.22, 1, 0.36, 1],
+            }}
+          />
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
+
 export function GlobeExperience() {
+  const [sunDirection, setSunDirection] = useState<[number, number, number]>(() =>
+    sunDirectionForDate(new Date()),
+  );
   const [selectedNode, setSelectedNode] = useState<ResumeNode | null>(null);
+  const [hoveredSectionId, setHoveredSectionId] = useState<string | null>(null);
   const [activeProjectMiniNodeId, setActiveProjectMiniNodeId] = useState<string | null>(null);
   const [activeExperienceMiniNodeId, setActiveExperienceMiniNodeId] = useState<string | null>(null);
   const [pendingExperienceScrollIndex, setPendingExperienceScrollIndex] = useState<number | null>(null);
   const [sceneMode, setSceneMode] = useState<SceneMode>("idle");
   const sectionRef = useRef<HTMLElement | null>(null);
   const [sectionHeight, setSectionHeight] = useState(900);
-  const [connectorAnchor, setConnectorAnchor] = useState<ConnectorAnchor>({
-    xPercent: 23,
-    yPercent: 64,
-    visible: false,
-  });
-  const [cursorLatLon, setCursorLatLon] = useState<CursorLatLon>({
-    latitude: null,
-    longitude: null,
-  });
   const prefersReducedMotion = useReducedMotion();
   const isMobile = useMobileLayout();
 
   const activeNodeId = selectedNode?.id ?? null;
   const isProjectsSelected = selectedNode?.id === "projects";
   const isExperienceSelected = selectedNode?.id === "experience";
+  const showExperienceHoverMenu =
+    isExperienceSelected && (isMobile || hoveredSectionId === "experience");
+  const showProjectsHoverMenu =
+    isProjectsSelected && (isMobile || hoveredSectionId === "projects");
   const projectsNode = useMemo(() => resumeNodes.find((node) => node.id === "projects") ?? null, []);
   const experienceNode = useMemo(() => resumeNodes.find((node) => node.id === "experience") ?? null, []);
   const activeProjectMiniNode =
@@ -416,6 +503,8 @@ export function GlobeExperience() {
   const switchRafRef = useRef<number | null>(null);
   /** Desktop: resume panel + connector overlay the right side; globe renders full-viewport (no canvas clip). */
   const isSplitView = !isMobile;
+  /** Match split-view globe framing so top UI anchors to globe center. */
+  const splitViewNavCenterX = "33%";
   const showConnectorLine =
     isSplitView &&
     selectedNode !== null &&
@@ -430,17 +519,13 @@ export function GlobeExperience() {
   const resumePanelTopPercent = Math.max(10, streamStartYPercent - RESUME_PANEL_LIFT_PCT);
   const splitPanelBaseTop = `calc(${resumePanelTopPercent}% + 1rem)`;
   const useTopTabStackLayout = isSplitView && (isProjectsSelected || isExperienceSelected);
-  // Keep the split-view panel from colliding with open mini-node trays near the top nav.
-  const splitPanelTop = isProjectsSelected
-    ? `max(${splitPanelBaseTop}, 20.5rem)`
-    : isExperienceSelected
-      ? `max(${splitPanelBaseTop}, 19rem)`
-      : splitPanelBaseTop;
+  // Hover trays no longer reserve persistent space; keep panel near the connector.
+  const splitPanelTop = `max(${splitPanelBaseTop}, 11rem)`;
   const splitPanelLeft = useTopTabStackLayout
-    ? "50%"
+    ? splitViewNavCenterX
     : `calc(${CONNECTOR_LINE_END_PCT}% + 0.5rem)`;
   const splitPanelWidth = useTopTabStackLayout
-    ? "min(58rem, calc(100% - 2rem))"
+    ? "min(40rem, calc(100% - 2rem))"
     : `min(52rem, calc(100% - ${CONNECTOR_LINE_END_PCT}% - 1.25rem))`;
   // Horizontal beam is h-[2px] with top at streamStartY — center is 1px lower (same coords as SVG viewBox %).
   const streamJunctionYPercent = Math.min(
@@ -540,6 +625,13 @@ export function GlobeExperience() {
       ? [1, 1.2]
       : [1, 1.5];
 
+  useEffect(() => {
+    const refreshSunDirection = () => setSunDirection(sunDirectionForDate(new Date()));
+    refreshSunDirection();
+    const timer = window.setInterval(refreshSunDirection, 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
+
   return (
     <section
       ref={sectionRef}
@@ -561,19 +653,27 @@ export function GlobeExperience() {
           camera={{ position: [0, 0.2, 21.5], fov: 44 }}
         >
           <Suspense fallback={null}>
-            <SpaceBackground sunDirection={SUN_DIRECTION} isMobile={isMobile} />
+            <SpaceBackground
+              sunDirection={sunDirection}
+              isMobile={isMobile}
+              reducedMotion={Boolean(prefersReducedMotion)}
+            />
             <group rotation={[0, GLOBE_GROUP_Y_ROTATION, 0]}>
               <Globe
                 isMobile={isMobile}
                 reducedMotion={Boolean(prefersReducedMotion)}
-                sunDirection={SUN_DIRECTION}
+                sunDirection={sunDirection}
               />
               <GlobeWeather
                 isMobile={isMobile}
                 reducedMotion={Boolean(prefersReducedMotion)}
-                sunDirection={SUN_DIRECTION}
+                sunDirection={sunDirection}
               />
-              <Atmosphere sunDirection={SUN_DIRECTION} />
+              <Atmosphere
+                sunDirection={sunDirection}
+                isMobile={isMobile}
+                reducedMotion={Boolean(prefersReducedMotion)}
+              />
               <GlobeNodes
                 activeNodeId={activeNodeId}
                 activeProjectMiniNodeId={activeProjectMiniNodeId}
@@ -589,6 +689,7 @@ export function GlobeExperience() {
               <OrbitalSatellites
                 accentColor={ACCENT_COLOR_HEX}
                 reducedMotion={Boolean(prefersReducedMotion)}
+                isMobile={isMobile}
               />
             </group>
             <CameraRig
@@ -612,10 +713,11 @@ export function GlobeExperience() {
             <ConnectorAnchorTracker
               latitude={selectedNode?.latitude ?? null}
               longitude={selectedNode?.longitude ?? null}
-              onChange={setConnectorAnchor}
+              onChange={setConnectorAnchorStore}
             />
-            <CursorLatLonTracker onChange={setCursorLatLon} />
+            <CursorLatLonTracker onChange={setCursorLatLonStore} />
             {!prefersReducedMotion && <AdaptiveDpr pixelated />}
+            <RuntimePerfMonitor />
           </Suspense>
         </Canvas>
       </div>
@@ -623,20 +725,13 @@ export function GlobeExperience() {
       <div className="pointer-events-none absolute inset-0 z-10 bg-gradient-to-b from-slate-900/20 via-transparent to-slate-950/50" />
 
       <ProfileContactHub />
-      <div className="pointer-events-auto absolute bottom-4 left-4 z-[52] flex max-w-[calc(100vw-2rem)] flex-col gap-3 md:bottom-8 md:left-8 md:max-w-[calc(100vw-4rem)]">
-        <div className="w-[13.5rem] shrink-0 rounded-lg border border-white/20 bg-slate-950/80 px-3 py-2 text-xs backdrop-blur-md md:text-sm">
-          {cursorLatLon.latitude !== null && cursorLatLon.longitude !== null ? (
-            <span style={{ color: ACCENT_COLOR_HEX }}>
-              Lat {cursorLatLon.latitude.toFixed(2)}°, Lon {cursorLatLon.longitude.toFixed(2)}°
-            </span>
-          ) : (
-            <span className="font-medium text-red-400">N/A</span>
-          )}
-        </div>
-      </div>
+      <CursorReadout />
 
-      {/* Section nav: centered in space to the right of the top-left profile card. */}
-      <div className="pointer-events-none absolute left-0 right-0 top-4 z-[60] flex justify-center pl-[min(19.5rem,calc(100vw-9.5rem))] pr-2 md:top-8 md:pl-[min(22rem,32vw)] md:pr-8">
+      {/* Section nav: in split-view, anchor over globe center so trays open centered below. */}
+      <div
+        className="pointer-events-none absolute top-4 z-[60] left-1/2 flex -translate-x-1/2 justify-center md:top-8"
+        style={isSplitView ? { left: splitViewNavCenterX } : undefined}
+      >
         <div className="relative flex max-w-full flex-col items-center gap-2 md:flex-row md:items-start">
           <nav
             className="pointer-events-auto flex max-w-full flex-wrap justify-center gap-2"
@@ -645,7 +740,12 @@ export function GlobeExperience() {
             {resumeNodes.map((node) => {
               const isActive = activeNodeId === node.id;
               return (
-                <div key={node.id} className="relative">
+                <div
+                  key={node.id}
+                  className="relative"
+                  onMouseEnter={() => setHoveredSectionId(node.id)}
+                  onMouseLeave={() => setHoveredSectionId((current) => (current === node.id ? null : current))}
+                >
                   <button
                     type="button"
                     onClick={() => onSelectNode(node)}
@@ -679,9 +779,9 @@ export function GlobeExperience() {
                   </button>
                   {node.id === "experience" ? (
                     <AnimatePresence>
-                      {isExperienceSelected ? (
+                      {showExperienceHoverMenu ? (
                         <motion.div
-                          className="pointer-events-auto absolute right-0 top-full mt-3 w-[min(96vw,36rem)] overflow-y-auto rounded-3xl border border-white/20 bg-slate-950/78 p-3.5 shadow-[0_20px_60px_rgba(2,6,23,0.55)] backdrop-blur-xl md:w-[34rem]"
+                          className="pointer-events-auto absolute left-1/2 top-full mt-3 w-[min(96vw,36rem)] -translate-x-1/2 overflow-y-auto rounded-3xl border border-white/20 bg-slate-950/78 p-3.5 shadow-[0_20px_60px_rgba(2,6,23,0.55)] backdrop-blur-xl md:w-[34rem]"
                           initial={{ opacity: 0, y: -8, x: 10 }}
                           animate={{ opacity: 1, y: 0, x: 0 }}
                           exit={{ opacity: 0, y: -6, x: 8 }}
@@ -728,108 +828,72 @@ export function GlobeExperience() {
                       ) : null}
                     </AnimatePresence>
                   ) : null}
+                  {node.id === "projects" ? (
+                    <AnimatePresence>
+                      {showProjectsHoverMenu ? (
+                        <motion.div
+                          className="pointer-events-auto absolute left-1/2 top-full mt-3 max-h-[min(70dvh,30rem)] w-[min(96vw,46rem)] -translate-x-1/2 overflow-y-auto rounded-3xl border border-white/20 bg-slate-950/78 p-3.5 shadow-[0_20px_60px_rgba(2,6,23,0.55)] backdrop-blur-xl md:max-h-[calc(100dvh-7rem)] md:w-[42rem]"
+                          initial={{ opacity: 0, y: -8, x: -10 }}
+                          animate={{ opacity: 1, y: 0, x: 0 }}
+                          exit={{ opacity: 0, y: -6, x: -8 }}
+                          transition={{ duration: 0.2, ease: "easeOut" }}
+                        >
+                          <div className="mb-3 flex items-center justify-between px-1">
+                            <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-200">
+                              Project nodes
+                            </div>
+                            <div className="rounded-full border border-white/20 bg-white/5 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.12em] text-slate-300">
+                              {projectMiniNodes.length} total
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2.5 md:grid-cols-4">
+                            {projectMiniNodes.map((miniNode) => {
+                              const isMiniActive = activeProjectMiniNodeId === miniNode.id;
+                              return (
+                                <button
+                                  key={miniNode.id}
+                                  type="button"
+                                  onClick={() => onSelectProjectMiniNode(miniNode.id)}
+                                  className="rounded-xl border px-3 py-2.5 text-left text-xs font-medium leading-snug shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] transition duration-200 hover:-translate-y-0.5 hover:brightness-110 md:text-[0.8rem]"
+                                  style={
+                                    isMiniActive
+                                      ? {
+                                          borderColor: colorToRgba(ACCENT_COLOR_HEX, 0.88),
+                                          backgroundColor: colorToRgba(ACCENT_COLOR_HEX, 0.22),
+                                          color: "rgb(240, 249, 255)",
+                                          boxShadow: `0 0 0 1px ${colorToRgba(ACCENT_COLOR_HEX, 0.35)} inset, 0 10px 28px ${colorToRgba(ACCENT_COLOR_HEX, 0.18)}`,
+                                        }
+                                      : {
+                                          borderColor: "rgba(148, 163, 184, 0.32)",
+                                          backgroundColor: "rgba(15, 23, 42, 0.72)",
+                                          color: "rgb(226, 232, 240)",
+                                        }
+                                  }
+                                >
+                                  {miniNode.title}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </motion.div>
+                      ) : null}
+                    </AnimatePresence>
+                  ) : null}
                 </div>
               );
             })}
           </nav>
-          <AnimatePresence>
-            {isProjectsSelected ? (
-              <motion.div
-                className="pointer-events-auto max-h-[min(70dvh,30rem)] w-[min(96vw,46rem)] overflow-y-auto rounded-3xl border border-white/20 bg-slate-950/78 p-3.5 shadow-[0_20px_60px_rgba(2,6,23,0.55)] backdrop-blur-xl md:absolute md:left-full md:top-0 md:ml-3 md:max-h-[calc(100dvh-7rem)] md:w-[42rem]"
-                initial={{ opacity: 0, y: -8, x: -10 }}
-                animate={{ opacity: 1, y: 0, x: 0 }}
-                exit={{ opacity: 0, y: -6, x: -8 }}
-                transition={{ duration: 0.2, ease: "easeOut" }}
-              >
-                <div className="mb-3 flex items-center justify-between px-1">
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-200">
-                    Project nodes
-                  </div>
-                  <div className="rounded-full border border-white/20 bg-white/5 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.12em] text-slate-300">
-                    {projectMiniNodes.length} total
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-2.5 md:grid-cols-4">
-                  {projectMiniNodes.map((miniNode) => {
-                    const isActive = activeProjectMiniNodeId === miniNode.id;
-                    return (
-                      <button
-                        key={miniNode.id}
-                        type="button"
-                        onClick={() => onSelectProjectMiniNode(miniNode.id)}
-                        className="rounded-xl border px-3 py-2.5 text-left text-xs font-medium leading-snug shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] transition duration-200 hover:-translate-y-0.5 hover:brightness-110 md:text-[0.8rem]"
-                        style={
-                          isActive
-                            ? {
-                                borderColor: colorToRgba(ACCENT_COLOR_HEX, 0.88),
-                                backgroundColor: colorToRgba(ACCENT_COLOR_HEX, 0.22),
-                                color: "rgb(240, 249, 255)",
-                                boxShadow: `0 0 0 1px ${colorToRgba(ACCENT_COLOR_HEX, 0.35)} inset, 0 10px 28px ${colorToRgba(ACCENT_COLOR_HEX, 0.18)}`,
-                              }
-                            : {
-                                borderColor: "rgba(148, 163, 184, 0.32)",
-                                backgroundColor: "rgba(15, 23, 42, 0.72)",
-                                color: "rgb(226, 232, 240)",
-                              }
-                        }
-                      >
-                        {miniNode.title}
-                      </button>
-                    );
-                  })}
-                </div>
-              </motion.div>
-            ) : null}
-          </AnimatePresence>
         </div>
       </div>
 
-      <AnimatePresence>
-        {selectedNode && (
-          <motion.div
-            className="pointer-events-none absolute inset-0 z-20 hidden md:block"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.25 }}
-          >
-            <AnimatePresence>
-              {showConnectorLine && connectorAnchor.visible && (
-                <ResumeConnector
-                  key="resume-connector"
-                  pinX={connectorAnchor.xPercent}
-                  pinY={connectorAnchor.yPercent}
-                  yJunction={streamJunctionYPercent}
-                  reducedMotion={Boolean(prefersReducedMotion)}
-                  pathsActive
-                />
-              )}
-            </AnimatePresence>
-            <motion.div
-              key={selectedNode.id}
-              className="absolute h-[2px] rounded-full"
-              style={{
-                top: streamStartY,
-                left: `${CONNECTOR_BAR_LEFT_PCT}%`,
-                width: `${CONNECTOR_BAR_WIDTH_PCT}%`,
-                transformOrigin: "left center",
-                backgroundColor: ACCENT_COLOR_HEX,
-                boxShadow: `0 0 6px ${colorToRgba(ACCENT_COLOR_HEX, 0.5)}, 0 0 14px ${colorToRgba(ACCENT_COLOR_HEX, 0.25)}`,
-              }}
-              initial={{ scaleX: 0, opacity: 0 }}
-              animate={{
-                scaleX: showConnectorLine ? 1 : 0,
-                opacity: showConnectorLine ? 1 : 0,
-              }}
-              exit={{ scaleX: 0, opacity: 0 }}
-              transition={{
-                duration: connectorPathsActive ? CONNECTOR_CONNECT_SEC : CONNECTOR_RETRACT_SEC,
-                ease: [0.22, 1, 0.36, 1],
-              }}
-            />
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <ConnectorOverlay
+        selectedNode={selectedNode}
+        showConnectorLine={showConnectorLine}
+        connectorPathsActive={connectorPathsActive}
+        streamJunctionYPercent={streamJunctionYPercent}
+        streamStartY={streamStartY}
+        reducedMotion={Boolean(prefersReducedMotion)}
+      />
 
       <ResumePanel
         node={showMainResumePanel ? showPanel : null}

@@ -34,7 +34,7 @@ export function Globe({ isMobile, reducedMotion, sunDirection }: GlobeProps) {
     const cores = navigator.hardwareConcurrency ?? 4;
     const prefersReducedData = window.matchMedia?.("(prefers-reduced-data: reduce)")?.matches;
     const canUpgrade =
-      !isMobile && !reducedMotion && !prefersReducedData && memory >= 8 && cores >= 8;
+      !isMobile && !reducedMotion && !prefersReducedData && memory >= 12 && cores >= 8;
 
     if (!canUpgrade) return;
 
@@ -85,7 +85,7 @@ export function Globe({ isMobile, reducedMotion, sunDirection }: GlobeProps) {
 
   const sunTint = useMemo(() => new Color("#fff8ef"), []);
   // Higher segment count so a large day texture isn’t wasted on a faceted sphere.
-  const segments = isMobile ? 80 : 160;
+  const segments = isMobile ? 56 : reducedMotion ? 88 : 112;
 
   return (
     <mesh renderOrder={0}>

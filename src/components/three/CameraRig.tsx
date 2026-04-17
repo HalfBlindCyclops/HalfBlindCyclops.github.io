@@ -108,6 +108,7 @@ export function CameraRig({
   const clampActualDir = useRef(new Vector3());
   const clampAxis = useRef(new Vector3());
   const wiggleDirSmoothedRef = useRef(new Vector3());
+  const wiggleClampedDirRef = useRef(new Vector3());
   const viewOffsetWeightRef = useRef(0);
   const lastViewOffsetPxRef = useRef<number | null>(null);
 
@@ -125,7 +126,7 @@ export function CameraRig({
     }
   }, [latitude, longitude, mode]);
 
-  const syncHomeVectors = () => {
+  useLayoutEffect(() => {
     setIdleOverviewFraming(
       homeLatitude,
       homeLongitude,
@@ -135,10 +136,6 @@ export function CameraRig({
       scratchFocus.current,
       tempDirection.current,
     );
-  };
-
-  useLayoutEffect(() => {
-    syncHomeVectors();
     camera.position.copy(homeCameraPos.current);
     const c = controlsRef.current;
     if (c) {
@@ -156,8 +153,6 @@ export function CameraRig({
     const dfp = desiredFocusPosition.current;
     const td = tempDirection.current;
     const shouldFocus = latitude !== null && longitude !== null && mode !== "returning";
-
-    syncHomeVectors();
 
     // Section open: no pan/zoom. Light orbit wiggle only once focus has settled ("focused").
     // During "focusing", camera still lerps to the framed pose; "returning" restores full orbit.
@@ -227,7 +222,7 @@ export function CameraRig({
           if (axis.lengthSq() < 1e-12) axis.set(0, 1, 0).cross(idealDir);
         }
         axis.normalize();
-        outDir = clampIdealDir.current.clone().applyAxisAngle(axis, maxWiggle);
+        outDir = wiggleClampedDirRef.current.copy(clampIdealDir.current).applyAxisAngle(axis, maxWiggle);
       }
 
       const wSm = wiggleDirSmoothedRef.current;

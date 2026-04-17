@@ -10,6 +10,7 @@ import { latLonToVector3 } from "@/lib/geo";
 type OrbitalSatellitesProps = {
   accentColor: string;
   reducedMotion: boolean;
+  isMobile: boolean;
 };
 
 type SatelliteSpec = {
@@ -112,12 +113,16 @@ const SATELLITE_PAIRS: SatellitePair[] = SATELLITE_SPECS.map((_, i, all) => ({
 
 const UP_AXIS = new Vector3(0, 1, 0);
 const ALT_AXIS = new Vector3(1, 0, 0);
-const SIGNAL_ARC_SEGMENTS = 24;
+const SIGNAL_ARC_SEGMENTS = 18;
 const SIGNAL_ARC_LIFT = 0.16;
 const SIGNAL_CLEARANCE_RADIUS = 1.08;
 const SATELLITE_SPEED_SCALE = 1 / 6;
 const PLANET_BLOCK_RADIUS = 1.03;
 const ACTIVE_LINKS_PER_NODE = 2;
+const LOW_TIER_ACTIVE_LINKS_PER_NODE = 1;
+const ARC_REBUILD_INTERVAL_ACTIVE_SEC = 1 / 30;
+const ARC_REBUILD_INTERVAL_IDLE_SEC = 1 / 12;
+const ARC_REBUILD_EPSILON_SQ = 0.00002;
 const PACKET_GAUSS_SIGMA = 0.044;
 const PACKET_CARRIER_PER_SIGMA = 1.22;
 const PACKET_BURST_PEAK = 0.64;
@@ -128,6 +133,23 @@ const RF_TIME_DRIFT_RAD_PER_SEC = 2.15;
 const RF_PEAK = 0.54;
 const RF_PACKET_BURST_GAIN = 0.82;
 const RF_PACKET_RIPPLE_MIX = 0.58;
+const INITIAL_LINE_POINTS = [new Vector3(0, 0, 0), new Vector3(0, 0, 0)] as const;
+
+type MutableLineGeometry = {
+  setPositions?: (pts: number[]) => void;
+  setFromPoints?: (pts: Vector3[]) => void;
+  attributes?: { position?: { needsUpdate?: boolean } };
+  computeBoundingSphere?: () => void;
+};
+
+type LineLikeObject = {
+  geometry?: MutableLineGeometry;
+  material?: { opacity?: number; linewidth?: number };
+};
+
+type GroupLikeObject = {
+  localToWorld: (point: Vector3) => Vector3;
+};
 const RF_LAYER_MULTIPATH_GAIN = 1.22;
 const RF_CHAOS_GAIN = 1.45;
 const PACKET_TRAVEL_SEC = 1.25;
@@ -270,8 +292,8 @@ function orbitPoint(spec: SatelliteSpec, theta: number, out: Vector3) {
   } else {
     out.set(Math.cos(theta), 0, Math.sin(theta)).multiplyScalar(spec.radius);
   }
-  out.applyAxisAngle(new Vector3(1, 0, 0), (spec.inclinationDeg * Math.PI) / 180);
-  out.applyAxisAngle(new Vector3(0, 1, 0), (spec.yawDeg * Math.PI) / 180);
+  out.applyAxisAngle(ALT_AXIS, (spec.inclinationDeg * Math.PI) / 180);
+  out.applyAxisAngle(UP_AXIS, (spec.yawDeg * Math.PI) / 180);
   return out;
 }
 
@@ -318,18 +340,11 @@ function pointOnArc(points: Vector3[], t: number, out: Vector3) {
 }
 
 function setLineGeometryFromPoints(
-  lineRef: { current: any },
+  lineRef: { current: LineLikeObject | null },
   points: Vector3[],
   positions: number[],
 ) {
-  const geometry = lineRef.current?.geometry as
-    | {
-        setPositions?: (pts: number[]) => void;
-        setFromPoints?: (pts: Vector3[]) => void;
-        attributes?: { position?: { needsUpdate?: boolean } };
-        computeBoundingSphere?: () => void;
-      }
-    | undefined;
+  const geometry = lineRef.current?.geometry;
   if (!geometry) return;
   if (typeof geometry.setPositions === "function") {
     for (let i = 0; i < points.length; i += 1) {
@@ -386,6 +401,7 @@ function SignalLine({
   activeSatIndicesRef,
   satPairAIndex,
   satPairBIndex,
+  lowQuality = false,
 }: {
   startRef: MutableRefObject<Vector3>;
   endRef: MutableRefObject<Vector3>;
@@ -414,9 +430,10 @@ function SignalLine({
   activeSatIndicesRef?: MutableRefObject<Set<number>>;
   satPairAIndex?: number;
   satPairBIndex?: number;
+  lowQuality?: boolean;
 }) {
-  const signalLineRef = useRef<any>(null);
-  const rfLineRef = useRef<any>(null);
+  const signalLineRef = useRef<LineLikeObject | null>(null);
+  const rfLineRef = useRef<LineLikeObject | null>(null);
   const pulseRef = useRef<Mesh>(null);
   const waveDotsRef = useRef<Array<Mesh | null>>([]);
   const startTmpRef = useRef(new Vector3());
@@ -431,7 +448,7 @@ function SignalLine({
   const arcPointsRef = useRef(
     Array.from({ length: SIGNAL_ARC_SEGMENTS + 1 }, () => new Vector3()),
   );
-  const signalGroupRef = useRef<any>(null);
+  const signalGroupRef = useRef<GroupLikeObject | null>(null);
   const linePositionsRef = useRef<number[]>(
     Array.from({ length: (SIGNAL_ARC_SEGMENTS + 1) * 3 }, () => 0),
   );
@@ -450,21 +467,47 @@ function SignalLine({
   const tangentToRef = useRef(new Vector3());
   const camDirRef = useRef(new Vector3());
   const midRef = useRef(new Vector3());
+  const previousStartRef = useRef(new Vector3());
+  const previousEndRef = useRef(new Vector3());
+  const previousArcValidRef = useRef(false);
+  const arcRebuildAccumRef = useRef(0);
 
-  useFrame(({ clock, camera }) => {
+  useFrame((state, delta) => {
+    const { clock, camera } = state;
     const t = clock.elapsedTime;
     const linkSelected = !linkKey || !activeLinkKeysRef || activeLinkKeysRef.current.has(linkKey);
     startTmpRef.current.copy(startRef.current);
     endTmpRef.current.copy(endRef.current);
-    buildSignalArcPoints(
-      startTmpRef.current,
-      endTmpRef.current,
-      arcPointsRef.current,
-      startDirRef.current,
-      endDirRef.current,
-      arcDirRef.current,
-      straight,
-    );
+    arcRebuildAccumRef.current += delta;
+    const startMoved =
+      previousArcValidRef.current &&
+      previousStartRef.current.distanceToSquared(startTmpRef.current) > ARC_REBUILD_EPSILON_SQ;
+    const endMoved =
+      previousArcValidRef.current &&
+      previousEndRef.current.distanceToSquared(endTmpRef.current) > ARC_REBUILD_EPSILON_SQ;
+    const rebuildInterval =
+      linkSelected || !lowQuality ? ARC_REBUILD_INTERVAL_ACTIVE_SEC : ARC_REBUILD_INTERVAL_IDLE_SEC;
+    const shouldRebuildArc =
+      !previousArcValidRef.current ||
+      startMoved ||
+      endMoved ||
+      arcRebuildAccumRef.current >= rebuildInterval;
+    if (shouldRebuildArc) {
+      buildSignalArcPoints(
+        startTmpRef.current,
+        endTmpRef.current,
+        arcPointsRef.current,
+        startDirRef.current,
+        endDirRef.current,
+        arcDirRef.current,
+        straight,
+      );
+      previousStartRef.current.copy(startTmpRef.current);
+      previousEndRef.current.copy(endTmpRef.current);
+      previousArcValidRef.current = true;
+      arcRebuildAccumRef.current = 0;
+      setLineGeometryFromPoints(signalLineRef, arcPointsRef.current, linePositionsRef.current);
+    }
     camDirRef.current.copy(camera.position).normalize();
     pointOnArc(arcPointsRef.current, 0.5, midRef.current);
     worldStartRef.current.copy(startTmpRef.current);
@@ -496,8 +539,6 @@ function SignalLine({
           activeSatIndicesRef.current.has(satPairBIndex);
     const lineVisible = baseVisible && pathClear && fullLineVisible && activeSatPair;
 
-    setLineGeometryFromPoints(signalLineRef, arcPointsRef.current, linePositionsRef.current);
-
     const rfPoints = rfPointsRef.current;
     const packetCenter = 0.065 + ((t % PACKET_TRAVEL_SEC) / PACKET_TRAVEL_SEC) * 0.87;
     const timePhase = t * RF_TIME_DRIFT_RAD_PER_SEC;
@@ -527,7 +568,9 @@ function SignalLine({
         .addScaledVector(normal, mixedOffset)
         .addScaledVector(tangent, Math.abs(burst) * 0.0065);
     }
-    setLineGeometryFromPoints(rfLineRef, rfPoints, rfLinePositionsRef.current);
+    if (shouldRebuildArc || linkSelected) {
+      setLineGeometryFromPoints(rfLineRef, rfPoints, rfLinePositionsRef.current);
+    }
 
     if (signalLineRef.current?.material) {
       const flicker = 0;
@@ -593,10 +636,14 @@ function SignalLine({
   });
 
   return (
-    <group ref={signalGroupRef}>
+    <group
+      ref={(node) => {
+        signalGroupRef.current = node as unknown as GroupLikeObject | null;
+      }}
+    >
       {halo ? (
         <Line
-          points={[startRef.current, endRef.current]}
+          points={INITIAL_LINE_POINTS}
           color={signalColor}
           transparent
           opacity={0.3}
@@ -606,8 +653,10 @@ function SignalLine({
         />
       ) : null}
       <Line
-        ref={rfLineRef}
-        points={[startRef.current, endRef.current]}
+        ref={(node) => {
+          rfLineRef.current = node as unknown as LineLikeObject | null;
+        }}
+        points={INITIAL_LINE_POINTS}
         color={signalColor}
         transparent
         opacity={0}
@@ -616,8 +665,10 @@ function SignalLine({
         depthWrite={false}
       />
       <Line
-        ref={signalLineRef}
-        points={[startRef.current, endRef.current]}
+        ref={(node) => {
+          signalLineRef.current = node as unknown as LineLikeObject | null;
+        }}
+        points={INITIAL_LINE_POINTS}
         color={signalColor}
         transparent
         opacity={orbitStyle ? 0.22 : solid ? 1 : signalOpacity}
@@ -660,12 +711,20 @@ function SignalLine({
   );
 }
 
-export function OrbitalSatellites({ accentColor, reducedMotion }: OrbitalSatellitesProps) {
+export function OrbitalSatellites({ accentColor, reducedMotion, isMobile }: OrbitalSatellitesProps) {
   const accent = useMemo(() => new Color().setStyle(accentColor), [accentColor]);
   const signalColor = useMemo(
     () => accent.clone().lerp(new Color("white"), 0.14),
     [accent],
   );
+  const lowQualityTier = useMemo(() => {
+    if (reducedMotion || isMobile) return true;
+    if (typeof navigator === "undefined") return false;
+    const nav = navigator as Navigator & { deviceMemory?: number };
+    const deviceMemory = nav.deviceMemory ?? 4;
+    const cores = navigator.hardwareConcurrency ?? 4;
+    return deviceMemory < 8 || cores < 8;
+  }, [isMobile, reducedMotion]);
   const nodeAnchors = useMemo(() => {
     const map = new Map<string, MutableRefObject<Vector3>>();
     for (const node of resumeNodes) {
@@ -681,7 +740,7 @@ export function OrbitalSatellites({ accentColor, reducedMotion }: OrbitalSatelli
     [],
   );
   const satMeshRefs = useRef<Array<Mesh | null>>([]);
-  const orbitLineRefs = useRef<Array<any>>([]);
+  const orbitLineRefs = useRef<Array<LineLikeObject | null>>([]);
   const activeNodeLinkKeysRef = useRef<Set<string>>(new Set());
   const activeSatIndicesRef = useRef<Set<number>>(new Set());
   const orbitTrackPoints = useMemo(() => {
@@ -727,7 +786,8 @@ export function OrbitalSatellites({ accentColor, reducedMotion }: OrbitalSatelli
         });
       });
       candidates.sort((a, b) => b.score - a.score);
-      for (let i = 0; i < Math.min(ACTIVE_LINKS_PER_NODE, candidates.length); i += 1) {
+      const maxActiveLinks = lowQualityTier ? LOW_TIER_ACTIVE_LINKS_PER_NODE : ACTIVE_LINKS_PER_NODE;
+      for (let i = 0; i < Math.min(maxActiveLinks, candidates.length); i += 1) {
         nextActive.add(candidates[i].key);
         nextActiveSatIndices.add(candidates[i].satIndex);
       }
@@ -799,29 +859,33 @@ export function OrbitalSatellites({ accentColor, reducedMotion }: OrbitalSatelli
             activeLinkKeysRef={activeNodeLinkKeysRef}
             idleOpacity={0.07}
             idleLineWidth={0.14}
+            lowQuality={lowQualityTier}
           />
         )),
       )}
 
-      {SATELLITE_PAIRS.map((pair) => (
-        <SignalLine
-          key={pair.id}
-          startRef={satPositionRefs[pair.aIndex]}
-          endRef={satPositionRefs[pair.bIndex]}
-          phase={pair.phase}
-          signalColor={signalColor}
-          reducedMotion={reducedMotion}
-          alwaysVisible
-          straight
-          requireClearPath
-          requireFullLineVisible
-          orbitStyle
-          requireActiveSatPair
-          activeSatIndicesRef={activeSatIndicesRef}
-          satPairAIndex={pair.aIndex}
-          satPairBIndex={pair.bIndex}
-        />
-      ))}
+      {!lowQualityTier
+        ? SATELLITE_PAIRS.map((pair) => (
+            <SignalLine
+              key={pair.id}
+              startRef={satPositionRefs[pair.aIndex]}
+              endRef={satPositionRefs[pair.bIndex]}
+              phase={pair.phase}
+              signalColor={signalColor}
+              reducedMotion={reducedMotion}
+              alwaysVisible
+              straight
+              requireClearPath
+              requireFullLineVisible
+              orbitStyle
+              requireActiveSatPair
+              activeSatIndicesRef={activeSatIndicesRef}
+              satPairAIndex={pair.aIndex}
+              satPairBIndex={pair.bIndex}
+              lowQuality={lowQualityTier}
+            />
+          ))
+        : null}
     </group>
   );
 }

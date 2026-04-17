@@ -31,6 +31,7 @@ function SceneClearTone({ opaque }: { opaque: boolean }) {
 type SpaceBackgroundProps = {
   sunDirection: [number, number, number];
   isMobile: boolean;
+  reducedMotion: boolean;
   transparentBackground?: boolean;
 };
 
@@ -53,17 +54,19 @@ function spaceBackgroundTextureUrl(isMobile: boolean): string {
 function SpacePhotoBackdrop({
   opacity = 0.52,
   isMobile,
+  reducedMotion,
 }: {
   opacity?: number;
   isMobile: boolean;
+  reducedMotion: boolean;
 }) {
-  const texture = useTexture(spaceBackgroundTextureUrl(isMobile));
-  useLayoutEffect(() => {
-    texture.colorSpace = SRGBColorSpace;
-  }, [texture]);
+  const texture = useTexture(spaceBackgroundTextureUrl(isMobile), (loaded) => {
+    loaded.colorSpace = SRGBColorSpace;
+  });
+  const segments = isMobile ? 28 : reducedMotion ? 32 : 40;
   return (
     <mesh renderOrder={-1000} rotation={[SKY_BACKDROP_PITCH, Math.PI, 0]}>
-      <sphereGeometry args={[520, 64, 64]} />
+      <sphereGeometry args={[520, segments, segments]} />
       <meshBasicMaterial
         map={texture}
         side={BackSide}
@@ -258,20 +261,23 @@ function SunMoonLayer({ sunDirection }: { sunDirection: [number, number, number]
 export function SpaceBackground({
   sunDirection,
   isMobile,
+  reducedMotion,
   transparentBackground = false,
 }: SpaceBackgroundProps) {
   return (
     <>
       <SceneClearTone opaque={!transparentBackground} />
-      {!transparentBackground ? <SpacePhotoBackdrop opacity={0.78} isMobile={isMobile} /> : null}
+      {!transparentBackground ? (
+        <SpacePhotoBackdrop opacity={0.78} isMobile={isMobile} reducedMotion={reducedMotion} />
+      ) : null}
       <ambientLight intensity={0.26} />
       <directionalLight
         position={[sunDirection[0] * 8, sunDirection[1] * 8, sunDirection[2] * 8]}
         intensity={1.85}
         color="#fff6e8"
       />
-      <pointLight position={[-5.5, -3, -2.2]} intensity={0.28} color="#3b82f6" />
-      <pointLight position={[0, 0, -7]} intensity={0.16} color="#64748b" />
+      {!isMobile ? <pointLight position={[-5.5, -3, -2.2]} intensity={0.28} color="#3b82f6" /> : null}
+      <pointLight position={[0, 0, -7]} intensity={isMobile ? 0.1 : 0.16} color="#64748b" />
       <SunMoonLayer sunDirection={sunDirection} />
     </>
   );

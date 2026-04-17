@@ -5,19 +5,24 @@ import { useMemo } from "react";
 
 type AtmosphereProps = {
   sunDirection: [number, number, number];
+  isMobile: boolean;
+  reducedMotion: boolean;
 };
 
 /**
  * Layered atmosphere: bulk air shell (wide viewing path) + near-surface haze + outer limb shell.
  * Uses NormalBlending (not stacked additive shells) for more photographic falloff.
  */
-export function Atmosphere({ sunDirection }: AtmosphereProps) {
+export function Atmosphere({ sunDirection, isMobile, reducedMotion }: AtmosphereProps) {
   const rayleighColor = useMemo(() => new Color("#4f8fd4"), []);
   const mieColor = useMemo(() => new Color("#b8cce8"), []);
   const nightAirglow = useMemo(() => new Color("#1e3558"), []);
   const hazeColor = useMemo(() => new Color("#7ca8d4"), []);
   const bulkDayAir = useMemo(() => new Color("#355a82"), []);
   const bulkTwilightAir = useMemo(() => new Color("#454e6a"), []);
+
+  const shellSegments = isMobile ? 52 : reducedMotion ? 58 : 68;
+  const limbSegments = isMobile ? 60 : reducedMotion ? 68 : 78;
 
   return (
     <>
@@ -26,7 +31,7 @@ export function Atmosphere({ sunDirection }: AtmosphereProps) {
         (low dot(P,V)) get strong inscatter so “air” reads as a volume, not only a ring.
       */}
       <mesh renderOrder={2}>
-        <sphereGeometry args={[1.012, 80, 80]} />
+        <sphereGeometry args={[1.012, shellSegments, shellSegments]} />
         <shaderMaterial
           blending={NormalBlending}
           transparent
@@ -85,7 +90,7 @@ export function Atmosphere({ sunDirection }: AtmosphereProps) {
 
       {/* Primary limb / terminator scattering (back faces of a slightly larger sphere) */}
       <mesh renderOrder={4}>
-        <sphereGeometry args={[1.022, 96, 96]} />
+        <sphereGeometry args={[1.022, limbSegments, limbSegments]} />
         <shaderMaterial
           blending={NormalBlending}
           transparent
@@ -179,7 +184,7 @@ export function Atmosphere({ sunDirection }: AtmosphereProps) {
 
       {/* Near-surface haze: very close shell for tight planet-hugging air glow */}
       <mesh renderOrder={3}>
-        <sphereGeometry args={[1.005, 80, 80]} />
+        <sphereGeometry args={[1.005, shellSegments, shellSegments]} />
         <shaderMaterial
           blending={NormalBlending}
           transparent

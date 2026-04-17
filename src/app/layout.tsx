@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Orbitron } from "next/font/google";
+import { WebVitals } from "@/components/diagnostics/WebVitals";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -17,7 +18,7 @@ const geistMono = Geist_Mono({
 const orbitron = Orbitron({
   variable: "--font-orbitron",
   subsets: ["latin"],
-  weight: ["500", "600", "700", "800"],
+  weight: ["600", "700"],
   adjustFontFallback: false,
 });
 
@@ -43,7 +44,10 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} ${orbitron.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col bg-slate-950 text-slate-100">{children}</body>
+      <body className="min-h-full flex flex-col bg-slate-950 text-slate-100">
+        <WebVitals />
+        {children}
+      </body>
     </html>
   );
 }

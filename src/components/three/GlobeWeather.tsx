@@ -145,19 +145,16 @@ function CloudLayer({
   sunDirection,
 }: GlobeWeatherProps) {
   const meshRef = useRef<Mesh>(null);
-  /** Single Vector3 for the shader uniform (avoid sunVec.clone() in JSX each mount). */
-  const sunDirUniform = useRef(new Vector3());
-
   const sunVec = useMemo(
     () => new Vector3(sunDirection[0], sunDirection[1], sunDirection[2]).normalize(),
     [sunDirection],
   );
-  sunDirUniform.current.copy(sunVec);
+  const uniformSunDirection = useMemo(() => sunVec.clone(), [sunVec]);
   const cloudBright = useMemo(() => new Color("#f2f6fc"), []);
   const cloudShadow = useMemo(() => new Color("#1c2333"), []);
   const cloudStorm = useMemo(() => new Color("#5c6578"), []);
 
-  const segments = isMobile ? 88 : 128;
+  const segments = isMobile ? 64 : reducedMotion ? 78 : 96;
   /** Slightly above terrain so clouds sit over land/ocean without z-fighting. */
   const cloudRadius = 1.008;
 
@@ -167,7 +164,7 @@ function CloudLayer({
     const mat = mesh.material as ShaderMaterial;
     if (!reducedMotion) {
       if (mat.uniforms.uTime) mat.uniforms.uTime.value += dt;
-      mesh.rotation.y += dt * 0.018;
+      mesh.rotation.y += dt * (isMobile ? 0.012 : 0.016);
     }
     mat.uniforms.sunDirection.value.copy(sunVec);
   });
@@ -186,7 +183,7 @@ function CloudLayer({
         polygonOffsetFactor={-0.5}
         polygonOffsetUnits={-0.5}
         uniforms={{
-          sunDirection: { value: sunDirUniform.current },
+          sunDirection: { value: uniformSunDirection },
           uTime: { value: 0 },
           cloudBright: { value: cloudBright },
           cloudShadow: { value: cloudShadow },
