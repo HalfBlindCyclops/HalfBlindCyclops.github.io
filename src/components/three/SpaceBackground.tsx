@@ -11,7 +11,7 @@ import {
 } from "three";
 import { useFrame, useThree } from "@react-three/fiber";
 import { useTexture } from "@react-three/drei";
-import { INITIAL_GLOBE_FOCUS } from "@/data/resumeNodes";
+import { resumeNodes } from "@/data/resumeNodes";
 import { publicPath } from "@/lib/basePath";
 import { latLonToSceneWorld } from "@/lib/geo";
 
@@ -185,21 +185,14 @@ function makeCrescentShadowTexture(): CanvasTexture {
 function SunMoonLayer({ sunDirection }: { sunDirection: [number, number, number] }) {
   const sunDir = useMemo(() => new Vector3(...sunDirection).normalize(), [sunDirection]);
   const moonDir = useMemo(() => {
-    // Keep moon opposite Boston/About reference point (antipode) for composition.
-    return latLonToSceneWorld(
-      -INITIAL_GLOBE_FOCUS.latitude,
-      INITIAL_GLOBE_FOCUS.longitude + 180,
-      1,
-    ).normalize();
+    const aboutNode = resumeNodes.find((node) => node.id === "about");
+    const aboutLatitude = aboutNode?.latitude ?? 0;
+    const aboutLongitude = aboutNode?.longitude ?? 0;
+    // Place moon at the antipode of the About node so it stays opposite that section.
+    return latLonToSceneWorld(-aboutLatitude, aboutLongitude + 180, 1).normalize();
   }, []);
   const sunPos = useMemo(() => sunDir.clone().multiplyScalar(42), [sunDir]);
-  const moonPos = useMemo(() => {
-    // Keep lunar placement opposite Boston, with slight bias into view.
-    const p = moonDir.clone().multiplyScalar(44);
-    if (p.z < 8) p.z = 8;
-    p.y += 2.5;
-    return p;
-  }, [moonDir]);
+  const moonPos = useMemo(() => moonDir.clone().multiplyScalar(44), [moonDir]);
   const raysRef = useRef<Sprite>(null);
   const moonTexture = useTexture(publicPath("/moon-texture-craters.webp"));
   const moonMaskTexture = useMemo(() => makeCircularMaskTexture(), []);

@@ -463,6 +463,7 @@ function MiniNodeSignalLink({
   isActive: boolean;
 }) {
   const ACTIVE_WAVE_DOT_COUNT = 7;
+  const lineRef = useRef<any>(null);
   const pulseARef = useRef<Mesh>(null);
   const pulseBRef = useRef<Mesh>(null);
   const receiverRingRef = useRef<Mesh>(null);
@@ -502,35 +503,54 @@ function MiniNodeSignalLink({
   const tempWavePoint = useRef(new Vector3());
   const tempWaveTangent = useRef(new Vector3());
   const tempWaveNormal = useRef(new Vector3());
+  const camDirRef = useRef(new Vector3());
   const upAxis = useMemo(() => new Vector3(0, 1, 0), []);
   const altAxis = useMemo(() => new Vector3(1, 0, 0), []);
+  const lineBaseOpacity = isActive ? 0.56 : 0.34;
 
-  useFrame(({ clock }) => {
+  useFrame(({ clock, camera }) => {
     const speed = reducedMotion ? 0.1 : 0.22;
     const head = (clock.elapsedTime * speed) % 1;
     const tail = (head + 0.45) % 1;
     const receivePulse = reducedMotion
       ? 1
       : 1 + Math.sin(clock.elapsedTime * 3.3 + signalPhase) * 0.16;
+    camDirRef.current.copy(camera.position).normalize();
+    let visibleSamples = 0;
+    for (let i = 0; i < pathPoints.length; i += 1) {
+      if (pathPoints[i].dot(camDirRef.current) > 0) visibleSamples += 1;
+    }
+    const lineVisibility = visibleSamples / Math.max(1, pathPoints.length);
 
     path.getPoint(head, tempPointA.current);
     path.getPoint(tail, tempPointB.current);
+    const pulseAVisible = tempPointA.current.dot(camDirRef.current) > 0;
+    const pulseBVisible = tempPointB.current.dot(camDirRef.current) > 0;
+    const receiverVisible = receiverBasePoint.dot(camDirRef.current) > 0;
+
+    if (lineRef.current?.material) {
+      lineRef.current.material.opacity = lineBaseOpacity * lineVisibility;
+    }
 
     if (pulseARef.current) {
       pulseARef.current.position.copy(tempPointA.current);
       const s = isActive ? 1.2 : 1;
       pulseARef.current.scale.setScalar(s);
+      pulseARef.current.visible = pulseAVisible;
     }
     if (pulseBRef.current) {
       pulseBRef.current.position.copy(tempPointB.current);
       const s = isActive ? 1.05 : 0.9;
       pulseBRef.current.scale.setScalar(s);
+      pulseBRef.current.visible = pulseBVisible;
     }
     if (receiverRingRef.current) {
       receiverRingRef.current.scale.setScalar((isActive ? 1.06 : 1) * receivePulse);
+      receiverRingRef.current.visible = receiverVisible;
     }
     if (receiverCoreRef.current) {
       receiverCoreRef.current.scale.setScalar((isActive ? 1.12 : 1) * (0.96 + (receivePulse - 1) * 0.65));
+      receiverCoreRef.current.visible = receiverVisible;
     }
 
     if (isActive && !reducedMotion) {
@@ -550,7 +570,7 @@ function MiniNodeSignalLink({
         dot.position.copy(tempWavePoint.current).addScaledVector(tempWaveNormal.current, waveOffset);
         const sizePulse = 0.9 + Math.sin(wavePhase + Math.PI / 2) * 0.1;
         dot.scale.setScalar(sizePulse);
-        dot.visible = true;
+        dot.visible = tempWavePoint.current.dot(camDirRef.current) > 0;
       }
     } else {
       waveDotsRef.current.forEach((dot) => {
@@ -563,10 +583,11 @@ function MiniNodeSignalLink({
   return (
     <group>
       <Line
+        ref={lineRef}
         points={pathPoints}
         color={pulseColor}
         transparent
-        opacity={isActive ? 0.56 : 0.34}
+        opacity={lineBaseOpacity}
         lineWidth={isActive ? 1.35 : 0.95}
         depthWrite={false}
       />

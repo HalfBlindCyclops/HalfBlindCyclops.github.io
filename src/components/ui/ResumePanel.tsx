@@ -39,11 +39,13 @@ function StructuredBullet({
   index,
   onClick,
   isActive = false,
+  bulletIndex,
 }: {
   bullet: string;
   index: number;
   onClick?: () => void;
   isActive?: boolean;
+  bulletIndex?: number;
 }) {
   const clickable = Boolean(onClick);
   const itemClassName = clickable
@@ -72,6 +74,7 @@ function StructuredBullet({
     return (
       <motion.li
         className="flex items-start gap-3"
+        data-bullet-index={bulletIndex}
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.15 + index * 0.06, duration: 0.24 }}
@@ -101,6 +104,7 @@ function StructuredBullet({
   return (
     <motion.li
       className="flex items-start gap-3"
+      data-bullet-index={bulletIndex}
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.15 + index * 0.06, duration: 0.24 }}
@@ -226,6 +230,8 @@ type ResumePanelProps = {
   splitViewPanelWidth?: string;
   activeProjectMiniNodeId?: string | null;
   onSelectProjectMiniNode?: (miniNodeId: string) => void;
+  scrollToBulletIndex?: number | null;
+  onDidScrollToBullet?: () => void;
 };
 
 export function ResumePanel({
@@ -240,6 +246,8 @@ export function ResumePanel({
   splitViewPanelWidth,
   activeProjectMiniNodeId = null,
   onSelectProjectMiniNode,
+  scrollToBulletIndex = null,
+  onDidScrollToBullet,
 }: ResumePanelProps) {
   const scrollBodyRef = useRef<HTMLDivElement>(null);
   const [hasVerticalScroll, setHasVerticalScroll] = useState(false);
@@ -288,6 +296,18 @@ export function ResumePanel({
       el.removeEventListener("scroll", updateScrollMetrics);
     };
   }, [node, updateScrollMetrics]);
+
+  useLayoutEffect(() => {
+    if (!node || scrollToBulletIndex === null) return;
+    const host = scrollBodyRef.current;
+    if (!host) return;
+    const target = host.querySelector<HTMLElement>(`[data-bullet-index="${scrollToBulletIndex}"]`);
+    if (!target) return;
+    requestAnimationFrame(() => {
+      target.scrollIntoView({ behavior: "smooth", block: "center" });
+      onDidScrollToBullet?.();
+    });
+  }, [node, onDidScrollToBullet, scrollToBulletIndex]);
 
   const splitTop = splitViewPanelTop ?? `calc(${streamStartY} + 1rem)`;
   const splitAnchored =
@@ -420,11 +440,17 @@ export function ResumePanel({
                 <ul className="space-y-5 md:space-y-6">
                   {node.bullets.map((bullet, index) =>
                     node.id === "experience" || node.id === "projects" ? (
-                      <StructuredBullet key={bullet} bullet={bullet} index={index} />
+                      <StructuredBullet
+                        key={bullet}
+                        bullet={bullet}
+                        index={index}
+                        bulletIndex={index}
+                      />
                     ) : (
                       <motion.li
                         key={bullet}
                         className="flex items-start gap-3"
+                        data-bullet-index={index}
                         initial={{ opacity: 0, y: 8 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 0.15 + index * 0.06, duration: 0.24 }}

@@ -17,6 +17,14 @@ const DAMPING_SECTION_LOCKED = 0.09;
 const DAMPING_IDLE = 0.085;
 /** When outside the cone, ease back toward the boundary (lower = softer at the limit). */
 const WIGGLE_CONE_BLEND_PER_SEC = 7;
+/** Camera node-to-node transition pace (lower = slower). */
+const FOCUS_CAMERA_LERP_SPEED = 1.35;
+const FOCUS_CAMERA_LERP_SPEED_REDUCED = 2.2;
+const TARGET_LERP_SPEED = 1.75;
+const TARGET_LERP_SPEED_REDUCED = 2.4;
+/** Split-view projection offset blend when closing panel to one-cam view (lower = slower). */
+const VIEW_OFFSET_BLEND_SPEED = 3.1;
+const VIEW_OFFSET_BLEND_SPEED_REDUCED = 5;
 
 type SceneMode = "idle" | "focusing" | "focused" | "returning";
 
@@ -100,6 +108,8 @@ export function CameraRig({
   const clampActualDir = useRef(new Vector3());
   const clampAxis = useRef(new Vector3());
   const wiggleDirSmoothedRef = useRef(new Vector3());
+  const viewOffsetWeightRef = useRef(0);
+  const lastViewOffsetPxRef = useRef<number | null>(null);
 
   useEffect(() => {
     const prev = prevModeRef.current;
@@ -137,42 +147,6 @@ export function CameraRig({
     }
   }, [camera, homeLatitude, homeLongitude, isMobile, reducedMotion]);
 
-  useEffect(() => {
-    const perspective = camera as typeof camera & {
-      setViewOffset?: (
-        fullWidth: number,
-        fullHeight: number,
-        x: number,
-        y: number,
-        width: number,
-        height: number,
-      ) => void;
-      clearViewOffset?: () => void;
-      updateProjectionMatrix: () => void;
-    };
-
-    if (
-      isMobile ||
-      !applyDesktopViewOffset ||
-      !perspective.setViewOffset ||
-      !perspective.clearViewOffset
-    ) {
-      perspective.clearViewOffset?.();
-      perspective.updateProjectionMatrix();
-      return;
-    }
-
-    // Off-center projection keeps the orbit focal point left of screen center
-    // while preserving a full-bleed canvas (avoids clipping/sliced globe).
-    const offsetX = Math.round(size.width * 0.195);
-    perspective.setViewOffset(size.width, size.height, offsetX, 0, size.width, size.height);
-    perspective.updateProjectionMatrix();
-    return () => {
-      perspective.clearViewOffset?.();
-      perspective.updateProjectionMatrix();
-    };
-  }, [applyDesktopViewOffset, camera, isMobile, size.height, size.width]);
-
   useFrame((_, delta) => {
     if (!controlsRef.current) return;
 
@@ -205,7 +179,9 @@ export function CameraRig({
       dfp.addScaledVector(td, isMobile ? 0.48 : 0.82);
       desiredPosition = dfp;
       if (!canWiggle) {
-        const cameraLerpSpeed = reducedMotion ? 3.6 : 2.1;
+        const cameraLerpSpeed = reducedMotion
+          ? FOCUS_CAMERA_LERP_SPEED_REDUCED
+          : FOCUS_CAMERA_LERP_SPEED;
         camera.position.lerp(desiredPosition, MathUtils.clamp(delta * cameraLerpSpeed, 0, 1));
       }
     } else if (mode === "returning") {
@@ -217,7 +193,14 @@ export function CameraRig({
       desiredPosition = camera.position;
     }
 
-    controls.target.lerp(t, MathUtils.clamp(delta * (reducedMotion ? 3.8 : 2.5), 0, 1));
+    controls.target.lerp(
+      t,
+      MathUtils.clamp(
+        delta * (reducedMotion ? TARGET_LERP_SPEED_REDUCED : TARGET_LERP_SPEED),
+        0,
+        1,
+      ),
+    );
     controls.autoRotate = mode === "idle";
     controls.autoRotateSpeed = reducedMotion ? 0.18 : 0.22;
     controls.update();
@@ -279,6 +262,48 @@ export function CameraRig({
     if (mode === "returning" && closeToTarget && closeToCamera && !returnNotifiedRef.current) {
       returnNotifiedRef.current = true;
       onReturnSettled();
+    }
+
+    const perspective = camera as typeof camera & {
+      setViewOffset?: (
+        fullWidth: number,
+        fullHeight: number,
+        x: number,
+        y: number,
+        width: number,
+        height: number,
+      ) => void;
+      clearViewOffset?: () => void;
+      updateProjectionMatrix: () => void;
+    };
+
+    if (!perspective.setViewOffset || !perspective.clearViewOffset) return;
+
+    if (isMobile) {
+      viewOffsetWeightRef.current = 0;
+      if (lastViewOffsetPxRef.current !== 0) {
+        perspective.clearViewOffset();
+        perspective.updateProjectionMatrix();
+        lastViewOffsetPxRef.current = 0;
+      }
+      return;
+    }
+
+    // Smoothly blend to/from desktop split-view projection when opening/closing panel.
+    const targetWeight = applyDesktopViewOffset ? 1 : 0;
+    const speed = reducedMotion ? VIEW_OFFSET_BLEND_SPEED_REDUCED : VIEW_OFFSET_BLEND_SPEED;
+    const nextWeight = MathUtils.damp(viewOffsetWeightRef.current, targetWeight, speed, delta);
+    viewOffsetWeightRef.current = Math.abs(nextWeight - targetWeight) < 0.001 ? targetWeight : nextWeight;
+
+    const offsetX = Math.round(size.width * 0.195 * viewOffsetWeightRef.current);
+    if (offsetX !== lastViewOffsetPxRef.current) {
+      if (offsetX === 0) {
+        perspective.clearViewOffset();
+      } else {
+        perspective.setViewOffset(size.width, size.height, offsetX, 0, size.width, size.height);
+      }
+      perspective.updateProjectionMatrix();
+      lastViewOffsetPxRef.current = offsetX;
     }
   });
 
