@@ -26,6 +26,7 @@ import {
 import { ProfileContactHub } from "@/components/ui/ProfileContactHub";
 import { ResumePanel } from "@/components/ui/ResumePanel";
 import { SceneLoader } from "@/components/ui/SceneLoader";
+import { experienceMiniNodes } from "@/data/experienceMiniNodes";
 import { projectMiniNodes } from "@/data/projectMiniNodes";
 import { INITIAL_GLOBE_FOCUS, resumeNodes, type ResumeNode } from "@/data/resumeNodes";
 import { ACCENT_COLOR_HEX, colorToRgba } from "@/lib/colorFormat";
@@ -269,6 +270,7 @@ function CursorLatLonTracker({
 export function GlobeExperience() {
   const [selectedNode, setSelectedNode] = useState<ResumeNode | null>(null);
   const [activeProjectMiniNodeId, setActiveProjectMiniNodeId] = useState<string | null>(null);
+  const [activeExperienceMiniNodeId, setActiveExperienceMiniNodeId] = useState<string | null>(null);
   const [sceneMode, setSceneMode] = useState<SceneMode>("idle");
   const sectionRef = useRef<HTMLElement | null>(null);
   const [sectionHeight, setSectionHeight] = useState(900);
@@ -286,12 +288,7 @@ export function GlobeExperience() {
 
   const activeNodeId = selectedNode?.id ?? null;
   const isProjectsSelected = selectedNode?.id === "projects";
-  const activeProjectMiniNode =
-    isProjectsSelected && activeProjectMiniNodeId
-      ? projectMiniNodes.find((node) => node.id === activeProjectMiniNodeId) ?? null
-      : null;
-  const focusLatitude = activeProjectMiniNode?.latitude ?? selectedNode?.latitude ?? null;
-  const focusLongitude = activeProjectMiniNode?.longitude ?? selectedNode?.longitude ?? null;
+  const isExperienceSelected = selectedNode?.id === "experience";
   const showPanel =
     selectedNode !== null && (sceneMode === "focusing" || sceneMode === "focused")
       ? selectedNode
@@ -314,7 +311,7 @@ export function GlobeExperience() {
     connectorPathsActive;
   /** Lower % = higher on screen. Same pin-based beam + same panel lift offset for every resume tab vs the beam. */
   const streamStartYPercent = selectedNode
-    ? Math.max(12, Math.min(32, 26 - ((focusLatitude ?? selectedNode.latitude) / 90) * 18))
+    ? Math.max(12, Math.min(32, 26 - (selectedNode.latitude / 90) * 18))
     : 22;
   const streamStartY = `${streamStartYPercent}%`;
   const RESUME_PANEL_LIFT_PCT = 4;
@@ -360,6 +357,7 @@ export function GlobeExperience() {
       switchRafRef.current = requestAnimationFrame(() => {
         setSelectedNode(node);
         if (node.id !== "projects") setActiveProjectMiniNodeId(null);
+        if (node.id !== "experience") setActiveExperienceMiniNodeId(null);
         setSceneMode("focusing");
       });
       return;
@@ -369,6 +367,7 @@ export function GlobeExperience() {
     setConnectorPathsActive(false);
     setSelectedNode(node);
     if (node.id !== "projects") setActiveProjectMiniNodeId(null);
+    if (node.id !== "experience") setActiveExperienceMiniNodeId(null);
     setSceneMode("focusing");
   };
 
@@ -385,12 +384,26 @@ export function GlobeExperience() {
     setActiveProjectMiniNodeId(miniNodeId);
   };
 
+  const onSelectExperienceMiniNode = (miniNodeId: string) => {
+    if (selectedNode?.id !== "experience") {
+      const experienceNode = resumeNodes.find((node) => node.id === "experience");
+      if (!experienceNode) return;
+      setConnectorPathsActive(false);
+      setSelectedNode(experienceNode);
+      setSceneMode("focusing");
+    } else {
+      setSceneMode("focusing");
+    }
+    setActiveExperienceMiniNodeId(miniNodeId);
+  };
+
   const onClosePanel = () => {
     setConnectorPathsActive(false);
     setActiveProjectMiniNodeId(null);
+    setActiveExperienceMiniNodeId(null);
     setSelectedNode(null);
-    // Lerp camera back to centered overview; onReturnSettled clears returning → idle.
-    setSceneMode("returning");
+    // Keep the current camera pose; only close UI overlays.
+    setSceneMode("idle");
   };
 
   const dprRange: [number, number] = prefersReducedMotion
@@ -436,16 +449,19 @@ export function GlobeExperience() {
               <GlobeNodes
                 activeNodeId={activeNodeId}
                 activeProjectMiniNodeId={activeProjectMiniNodeId}
-                showProjectMiniNodes={isProjectsSelected}
+                activeExperienceMiniNodeId={activeExperienceMiniNodeId}
+                showProjectMiniNodes
+                showExperienceMiniNodes
                 reducedMotion={Boolean(prefersReducedMotion)}
                 accentColor={ACCENT_COLOR_HEX}
                 onSelect={onSelectNode}
                 onSelectProjectMiniNode={onSelectProjectMiniNode}
+                onSelectExperienceMiniNode={onSelectExperienceMiniNode}
               />
             </group>
             <CameraRig
-              latitude={focusLatitude}
-              longitude={focusLongitude}
+              latitude={selectedNode?.latitude ?? null}
+              longitude={selectedNode?.longitude ?? null}
               homeLatitude={INITIAL_GLOBE_FOCUS.latitude}
               homeLongitude={INITIAL_GLOBE_FOCUS.longitude}
               mode={sceneMode}
@@ -462,8 +478,8 @@ export function GlobeExperience() {
               }}
             />
             <ConnectorAnchorTracker
-              latitude={focusLatitude}
-              longitude={focusLongitude}
+              latitude={selectedNode?.latitude ?? null}
+              longitude={selectedNode?.longitude ?? null}
               onChange={setConnectorAnchor}
             />
             <CursorLatLonTracker onChange={setCursorLatLon} />
@@ -491,49 +507,137 @@ export function GlobeExperience() {
       </div>
 
       {/* Section nav: centered in space to the right of the top-left profile card. */}
-      <div className="pointer-events-none absolute left-0 right-0 top-4 z-[48] flex justify-center pl-[min(19.5rem,calc(100vw-9.5rem))] pr-2 md:top-8 md:pl-[min(22rem,32vw)] md:pr-8">
-        <nav
-          className="pointer-events-auto flex max-w-full flex-wrap justify-center gap-2"
-          aria-label="Resume sections"
-        >
-          {resumeNodes.map((node) => {
-            const isActive = activeNodeId === node.id;
-            return (
-              <button
-                key={node.id}
-                type="button"
-                onClick={() => onSelectNode(node)}
-                className="min-h-10 shrink-0 rounded-full border px-4 py-2 text-sm font-medium backdrop-blur-md transition"
-                style={
-                  isActive
-                    ? {
-                        borderColor: colorToRgba(ACCENT_COLOR_HEX, 0.78),
-                        backgroundColor: colorToRgba(ACCENT_COLOR_HEX, 0.18),
-                        color: "rgb(248, 250, 252)",
-                        boxShadow: `0 0 20px ${colorToRgba(ACCENT_COLOR_HEX, 0.16)}`,
-                      }
-                    : {
-                        borderColor: "rgba(255, 255, 255, 0.2)",
-                        backgroundColor: "rgba(15, 23, 42, 0.55)",
-                        color: "rgb(241, 245, 249)",
-                      }
-                }
-                onMouseEnter={(e) => {
-                  if (activeNodeId === node.id) return;
-                  e.currentTarget.style.borderColor = colorToRgba(ACCENT_COLOR_HEX, 0.5);
-                  e.currentTarget.style.backgroundColor = "rgba(30, 41, 59, 0.7)";
-                }}
-                onMouseLeave={(e) => {
-                  if (activeNodeId === node.id) return;
-                  e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.2)";
-                  e.currentTarget.style.backgroundColor = "rgba(15, 23, 42, 0.55)";
-                }}
+      <div className="pointer-events-none absolute left-0 right-0 top-4 z-[60] flex justify-center pl-[min(19.5rem,calc(100vw-9.5rem))] pr-2 md:top-8 md:pl-[min(22rem,32vw)] md:pr-8">
+        <div className="relative flex max-w-full flex-col items-center gap-2 md:flex-row md:items-start">
+          <nav
+            className="pointer-events-auto flex max-w-full flex-wrap justify-center gap-2"
+            aria-label="Resume sections"
+          >
+            {resumeNodes.map((node) => {
+              const isActive = activeNodeId === node.id;
+              return (
+                <button
+                  key={node.id}
+                  type="button"
+                  onClick={() => onSelectNode(node)}
+                  className="min-h-10 shrink-0 rounded-full border px-4 py-2 text-sm font-medium backdrop-blur-md transition"
+                  style={
+                    isActive
+                      ? {
+                          borderColor: colorToRgba(ACCENT_COLOR_HEX, 0.78),
+                          backgroundColor: colorToRgba(ACCENT_COLOR_HEX, 0.18),
+                          color: "rgb(248, 250, 252)",
+                          boxShadow: `0 0 20px ${colorToRgba(ACCENT_COLOR_HEX, 0.16)}`,
+                        }
+                      : {
+                          borderColor: "rgba(255, 255, 255, 0.2)",
+                          backgroundColor: "rgba(15, 23, 42, 0.55)",
+                          color: "rgb(241, 245, 249)",
+                        }
+                  }
+                  onMouseEnter={(e) => {
+                    if (activeNodeId === node.id) return;
+                    e.currentTarget.style.borderColor = colorToRgba(ACCENT_COLOR_HEX, 0.5);
+                    e.currentTarget.style.backgroundColor = "rgba(30, 41, 59, 0.7)";
+                  }}
+                  onMouseLeave={(e) => {
+                    if (activeNodeId === node.id) return;
+                    e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.2)";
+                    e.currentTarget.style.backgroundColor = "rgba(15, 23, 42, 0.55)";
+                  }}
+                >
+                  {node.title}
+                </button>
+              );
+            })}
+          </nav>
+          <AnimatePresence>
+            {isProjectsSelected ? (
+              <motion.div
+                className="pointer-events-auto max-h-[min(70dvh,30rem)] w-[min(92vw,24rem)] overflow-y-auto rounded-2xl border border-white/20 bg-slate-950/82 p-3 backdrop-blur-md md:absolute md:left-full md:top-0 md:ml-3 md:max-h-[calc(100dvh-7rem)] md:w-[22rem]"
+                initial={{ opacity: 0, y: -8, x: -10 }}
+                animate={{ opacity: 1, y: 0, x: 0 }}
+                exit={{ opacity: 0, y: -6, x: -8 }}
+                transition={{ duration: 0.2, ease: "easeOut" }}
               >
-                {node.title}
-              </button>
-            );
-          })}
-        </nav>
+                <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-300">
+                  Project nodes
+                </div>
+                <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                  {projectMiniNodes.map((miniNode) => {
+                    const isActive = activeProjectMiniNodeId === miniNode.id;
+                    return (
+                      <button
+                        key={miniNode.id}
+                        type="button"
+                        onClick={() => onSelectProjectMiniNode(miniNode.id)}
+                        className="rounded-lg border px-3 py-2 text-left text-xs font-medium transition md:text-[0.8rem]"
+                        style={
+                          isActive
+                            ? {
+                                borderColor: colorToRgba(ACCENT_COLOR_HEX, 0.7),
+                                backgroundColor: colorToRgba(ACCENT_COLOR_HEX, 0.16),
+                                color: "rgb(236, 254, 255)",
+                              }
+                            : {
+                                borderColor: "rgba(148, 163, 184, 0.28)",
+                                backgroundColor: "rgba(15, 23, 42, 0.55)",
+                                color: "rgb(226, 232, 240)",
+                              }
+                        }
+                      >
+                        {miniNode.title}
+                      </button>
+                    );
+                  })}
+                </div>
+              </motion.div>
+            ) : null}
+          </AnimatePresence>
+          <AnimatePresence>
+            {isExperienceSelected ? (
+              <motion.div
+                className="pointer-events-auto max-h-[min(52dvh,20rem)] w-[min(92vw,22rem)] overflow-y-auto rounded-2xl border border-white/20 bg-slate-950/82 p-3 backdrop-blur-md md:absolute md:right-full md:top-full md:mr-3 md:mt-2 md:max-h-[calc(100dvh-9rem)] md:w-[21rem]"
+                initial={{ opacity: 0, y: -8, x: 10 }}
+                animate={{ opacity: 1, y: 0, x: 0 }}
+                exit={{ opacity: 0, y: -6, x: 8 }}
+                transition={{ duration: 0.2, ease: "easeOut" }}
+              >
+                <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-300">
+                  Experience nodes
+                </div>
+                <div className="grid grid-cols-1 gap-2">
+                  {experienceMiniNodes.map((miniNode) => {
+                    const isActive = activeExperienceMiniNodeId === miniNode.id;
+                    return (
+                      <button
+                        key={miniNode.id}
+                        type="button"
+                        onClick={() => onSelectExperienceMiniNode(miniNode.id)}
+                        className="rounded-lg border px-3 py-2 text-left text-xs font-medium transition md:text-[0.8rem]"
+                        style={
+                          isActive
+                            ? {
+                                borderColor: colorToRgba(ACCENT_COLOR_HEX, 0.7),
+                                backgroundColor: colorToRgba(ACCENT_COLOR_HEX, 0.16),
+                                color: "rgb(236, 254, 255)",
+                              }
+                            : {
+                                borderColor: "rgba(148, 163, 184, 0.28)",
+                                backgroundColor: "rgba(15, 23, 42, 0.55)",
+                                color: "rgb(226, 232, 240)",
+                              }
+                        }
+                      >
+                        {miniNode.title}
+                      </button>
+                    );
+                  })}
+                </div>
+              </motion.div>
+            ) : null}
+          </AnimatePresence>
+        </div>
       </div>
 
       <AnimatePresence>

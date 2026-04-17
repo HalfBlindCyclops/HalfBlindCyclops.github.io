@@ -1,9 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Color, Mesh, Quaternion, Vector3 } from "three";
-import { Billboard, Text, useCursor } from "@react-three/drei";
+import { Color, Mesh, QuadraticBezierCurve3, Quaternion, Vector3 } from "three";
+import { Billboard, Line, Text, useCursor } from "@react-three/drei";
 import { useFrame, type ThreeEvent } from "@react-three/fiber";
+import { experienceMiniNodes } from "@/data/experienceMiniNodes";
 import { projectMiniNodes } from "@/data/projectMiniNodes";
 import { resumeNodes, type ResumeNode } from "@/data/resumeNodes";
 import { latLonToVector3 } from "@/lib/geo";
@@ -28,11 +29,14 @@ function stemColorFromAccent(base: Color): Color {
 type GlobeNodesProps = {
   activeNodeId: string | null;
   activeProjectMiniNodeId: string | null;
+  activeExperienceMiniNodeId: string | null;
   showProjectMiniNodes: boolean;
+  showExperienceMiniNodes: boolean;
   reducedMotion: boolean;
   accentColor?: string;
   onSelect: (node: ResumeNode) => void;
   onSelectProjectMiniNode: (miniNodeId: string) => void;
+  onSelectExperienceMiniNode: (miniNodeId: string) => void;
 };
 
 type ActiveRingSpec = {
@@ -313,7 +317,7 @@ function NodeMarker({
   );
 }
 
-function ProjectMiniNodeMarker({
+function MiniNodeMarker({
   id,
   title,
   latitude,
@@ -441,14 +445,207 @@ function ProjectMiniNodeMarker({
   );
 }
 
+function MiniNodeSignalLink({
+  fromLatitude,
+  fromLongitude,
+  toLatitude,
+  toLongitude,
+  accentColor,
+  reducedMotion,
+  isActive,
+}: {
+  fromLatitude: number;
+  fromLongitude: number;
+  toLatitude: number;
+  toLongitude: number;
+  accentColor: Color;
+  reducedMotion: boolean;
+  isActive: boolean;
+}) {
+  const ACTIVE_WAVE_DOT_COUNT = 7;
+  const pulseARef = useRef<Mesh>(null);
+  const pulseBRef = useRef<Mesh>(null);
+  const receiverRingRef = useRef<Mesh>(null);
+  const receiverCoreRef = useRef<Mesh>(null);
+  const waveDotsRef = useRef<Array<Mesh | null>>([]);
+  const pulseColor = useMemo(
+    () => vividAccentForPin(accentColor, isActive).clone().lerp(new Color("white"), 0.08),
+    [accentColor, isActive],
+  );
+  const receiverBasePoint = useMemo(
+    () => latLonToVector3(toLatitude, toLongitude, 1.0645),
+    [toLatitude, toLongitude],
+  );
+  const receiverNormal = useMemo(() => receiverBasePoint.clone().normalize(), [receiverBasePoint]);
+  const receiverQuat = useMemo(() => {
+    const up = new Vector3(0, 1, 0);
+    return new Quaternion().setFromUnitVectors(up, receiverNormal);
+  }, [receiverNormal]);
+  const signalPhase = useMemo(
+    () => (Math.abs(fromLatitude * 13.7 + fromLongitude * 7.9) % 360) * (Math.PI / 180),
+    [fromLatitude, fromLongitude],
+  );
+  const path = useMemo(() => {
+    const start = latLonToVector3(fromLatitude, fromLongitude, 1.036);
+    const end = latLonToVector3(toLatitude, toLongitude, 1.062);
+    const control = start
+      .clone()
+      .add(end)
+      .multiplyScalar(0.5)
+      .normalize()
+      .multiplyScalar(1.14);
+    return new QuadraticBezierCurve3(start, control, end);
+  }, [fromLatitude, fromLongitude, toLatitude, toLongitude]);
+  const pathPoints = useMemo(() => path.getPoints(48), [path]);
+  const tempPointA = useRef(new Vector3());
+  const tempPointB = useRef(new Vector3());
+  const tempWavePoint = useRef(new Vector3());
+  const tempWaveTangent = useRef(new Vector3());
+  const tempWaveNormal = useRef(new Vector3());
+  const upAxis = useMemo(() => new Vector3(0, 1, 0), []);
+  const altAxis = useMemo(() => new Vector3(1, 0, 0), []);
+
+  useFrame(({ clock }) => {
+    const speed = reducedMotion ? 0.1 : 0.22;
+    const head = (clock.elapsedTime * speed) % 1;
+    const tail = (head + 0.45) % 1;
+    const receivePulse = reducedMotion
+      ? 1
+      : 1 + Math.sin(clock.elapsedTime * 3.3 + signalPhase) * 0.16;
+
+    path.getPoint(head, tempPointA.current);
+    path.getPoint(tail, tempPointB.current);
+
+    if (pulseARef.current) {
+      pulseARef.current.position.copy(tempPointA.current);
+      const s = isActive ? 1.2 : 1;
+      pulseARef.current.scale.setScalar(s);
+    }
+    if (pulseBRef.current) {
+      pulseBRef.current.position.copy(tempPointB.current);
+      const s = isActive ? 1.05 : 0.9;
+      pulseBRef.current.scale.setScalar(s);
+    }
+    if (receiverRingRef.current) {
+      receiverRingRef.current.scale.setScalar((isActive ? 1.06 : 1) * receivePulse);
+    }
+    if (receiverCoreRef.current) {
+      receiverCoreRef.current.scale.setScalar((isActive ? 1.12 : 1) * (0.96 + (receivePulse - 1) * 0.65));
+    }
+
+    if (isActive && !reducedMotion) {
+      for (let i = 0; i < ACTIVE_WAVE_DOT_COUNT; i += 1) {
+        const dot = waveDotsRef.current[i];
+        if (!dot) continue;
+        const progress = (i / ACTIVE_WAVE_DOT_COUNT + clock.elapsedTime * 0.22) % 1;
+        path.getPoint(progress, tempWavePoint.current);
+        path.getTangent(progress, tempWaveTangent.current);
+        tempWaveNormal.current.crossVectors(tempWaveTangent.current, upAxis);
+        if (tempWaveNormal.current.lengthSq() < 1e-5) {
+          tempWaveNormal.current.crossVectors(tempWaveTangent.current, altAxis);
+        }
+        tempWaveNormal.current.normalize();
+        const wavePhase = progress * Math.PI * 9 - clock.elapsedTime * 6.2 + signalPhase;
+        const waveOffset = Math.sin(wavePhase) * 0.0085;
+        dot.position.copy(tempWavePoint.current).addScaledVector(tempWaveNormal.current, waveOffset);
+        const sizePulse = 0.9 + Math.sin(wavePhase + Math.PI / 2) * 0.1;
+        dot.scale.setScalar(sizePulse);
+        dot.visible = true;
+      }
+    } else {
+      waveDotsRef.current.forEach((dot) => {
+        if (!dot) return;
+        dot.visible = false;
+      });
+    }
+  });
+
+  return (
+    <group>
+      <Line
+        points={pathPoints}
+        color={pulseColor}
+        transparent
+        opacity={isActive ? 0.56 : 0.34}
+        lineWidth={isActive ? 1.35 : 0.95}
+        depthWrite={false}
+      />
+      <mesh ref={pulseARef} raycast={() => null}>
+        <sphereGeometry args={[0.0054, 12, 12]} />
+        <meshBasicMaterial
+          color={pulseColor}
+          toneMapped={false}
+          transparent
+          opacity={isActive ? 0.95 : 0.82}
+          depthWrite={false}
+        />
+      </mesh>
+      <mesh ref={pulseBRef} raycast={() => null}>
+        <sphereGeometry args={[0.0042, 10, 10]} />
+        <meshBasicMaterial
+          color={pulseColor}
+          toneMapped={false}
+          transparent
+          opacity={isActive ? 0.86 : 0.7}
+          depthWrite={false}
+        />
+      </mesh>
+      <group position={receiverBasePoint} quaternion={receiverQuat} raycast={() => null}>
+        <mesh ref={receiverRingRef} rotation={[Math.PI / 2, 0, 0]}>
+          <torusGeometry args={[0.016, 0.0016, 10, 40]} />
+          <meshBasicMaterial
+            color={pulseColor}
+            toneMapped={false}
+            transparent
+            opacity={isActive ? 0.7 : 0.38}
+            depthWrite={false}
+          />
+        </mesh>
+        <mesh ref={receiverCoreRef} position={[0, 0.0014, 0]}>
+          <sphereGeometry args={[0.0052, 12, 12]} />
+          <meshBasicMaterial
+            color={pulseColor}
+            toneMapped={false}
+            transparent
+            opacity={isActive ? 0.92 : 0.62}
+            depthWrite={false}
+          />
+        </mesh>
+      </group>
+      {Array.from({ length: ACTIVE_WAVE_DOT_COUNT }).map((_, i) => (
+        <mesh
+          key={`wave-dot-${i}`}
+          ref={(node) => {
+            waveDotsRef.current[i] = node;
+          }}
+          visible={false}
+          raycast={() => null}
+        >
+          <sphereGeometry args={[0.0033, 10, 10]} />
+          <meshBasicMaterial
+            color={pulseColor}
+            toneMapped={false}
+            transparent
+            opacity={0.8}
+            depthWrite={false}
+          />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
 export function GlobeNodes({
   activeNodeId,
   activeProjectMiniNodeId,
+  activeExperienceMiniNodeId,
   showProjectMiniNodes,
+  showExperienceMiniNodes,
   reducedMotion,
   accentColor,
   onSelect,
   onSelectProjectMiniNode,
+  onSelectExperienceMiniNode,
 }: GlobeNodesProps) {
   const hoverRafRef = useRef<number | null>(null);
   const [globePointer, setGlobePointer] = useState(false);
@@ -456,6 +653,8 @@ export function GlobeNodes({
     () => new Color().setStyle(accentColor ?? "#2dd4bf"),
     [accentColor],
   );
+  const projectsNode = useMemo(() => resumeNodes.find((node) => node.id === "projects") ?? null, []);
+  const experienceNode = useMemo(() => resumeNodes.find((node) => node.id === "experience") ?? null, []);
 
   const onHoverIntent = useCallback((id: string | null) => {
     if (hoverRafRef.current !== null) {
@@ -496,7 +695,7 @@ export function GlobeNodes({
       ))}
       {showProjectMiniNodes
         ? projectMiniNodes.map((miniNode) => (
-            <ProjectMiniNodeMarker
+            <MiniNodeMarker
               key={miniNode.id}
               id={miniNode.id}
               title={miniNode.title}
@@ -507,6 +706,50 @@ export function GlobeNodes({
               reducedMotion={reducedMotion}
               onClick={() => onSelectProjectMiniNode(miniNode.id)}
               onHoverIntent={onHoverIntent}
+            />
+          ))
+        : null}
+      {showProjectMiniNodes && projectsNode
+        ? projectMiniNodes.map((miniNode) => (
+            <MiniNodeSignalLink
+              key={`${miniNode.id}-link`}
+              fromLatitude={miniNode.latitude}
+              fromLongitude={miniNode.longitude}
+              toLatitude={projectsNode.latitude}
+              toLongitude={projectsNode.longitude}
+              accentColor={miniAccent}
+              reducedMotion={reducedMotion}
+              isActive={activeProjectMiniNodeId === miniNode.id}
+            />
+          ))
+        : null}
+      {showExperienceMiniNodes
+        ? experienceMiniNodes.map((miniNode) => (
+            <MiniNodeMarker
+              key={miniNode.id}
+              id={miniNode.id}
+              title={miniNode.title}
+              latitude={miniNode.latitude}
+              longitude={miniNode.longitude}
+              isActive={activeExperienceMiniNodeId === miniNode.id}
+              accentColor={miniAccent}
+              reducedMotion={reducedMotion}
+              onClick={() => onSelectExperienceMiniNode(miniNode.id)}
+              onHoverIntent={onHoverIntent}
+            />
+          ))
+        : null}
+      {showExperienceMiniNodes && experienceNode
+        ? experienceMiniNodes.map((miniNode) => (
+            <MiniNodeSignalLink
+              key={`${miniNode.id}-link`}
+              fromLatitude={miniNode.latitude}
+              fromLongitude={miniNode.longitude}
+              toLatitude={experienceNode.latitude}
+              toLongitude={experienceNode.longitude}
+              accentColor={miniAccent}
+              reducedMotion={reducedMotion}
+              isActive={activeExperienceMiniNodeId === miniNode.id}
             />
           ))
         : null}
