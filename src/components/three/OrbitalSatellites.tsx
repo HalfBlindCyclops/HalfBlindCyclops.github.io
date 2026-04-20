@@ -11,7 +11,10 @@ type OrbitalSatellitesProps = {
   accentColor: string;
   reducedMotion: boolean;
   isMobile: boolean;
+  styleVariant?: SatelliteArrayStyle;
 };
+
+export type SatelliteArrayStyle = "walker" | "rosette" | "triad";
 
 type SatelliteSpec = {
   id: string;
@@ -20,96 +23,348 @@ type SatelliteSpec = {
   phase: number;
   inclinationDeg: number;
   yawDeg: number;
+  planeIndex: number;
+  slotIndex: number;
+  layer: "inner" | "core" | "outer" | "drifter";
   eccentricity?: number;
   argumentOfPerigeeDeg?: number;
 };
 
-type SatellitePair = {
+type SatelliteLinkCandidate = {
   id: string;
   aIndex: number;
   bIndex: number;
   phase: number;
+  baseScore: number;
+  kind: "backbone" | "access";
 };
 
-const SATELLITE_SPECS: SatelliteSpec[] = [
-  {
-    id: "sat-about",
-    radius: 1.62,
-    speed: 0.03,
-    phase: 0.9,
-    inclinationDeg: 33,
-    yawDeg: -96,
-    eccentricity: 0.12,
-    argumentOfPerigeeDeg: 24,
-  },
-  {
-    id: "sat-experience",
-    radius: 2.22,
-    speed: 0.012,
-    phase: 2.55,
-    inclinationDeg: 58,
-    yawDeg: -112,
-    eccentricity: 0.34,
-    argumentOfPerigeeDeg: 250,
-  },
-  {
-    id: "sat-projects",
-    radius: 1.88,
-    speed: 0.018,
-    phase: 4.6,
-    inclinationDeg: 42,
-    yawDeg: -84,
-    eccentricity: 0.08,
-    argumentOfPerigeeDeg: 196,
-  },
-  {
-    id: "sat-relay-1",
-    radius: 1.74,
-    speed: 0.024,
-    phase: 1.7,
-    inclinationDeg: 49,
-    yawDeg: -101,
-    eccentricity: 0.09,
-    argumentOfPerigeeDeg: 302,
-  },
-  {
-    id: "sat-relay-2",
-    radius: 2.06,
-    speed: 0.016,
-    phase: 3.3,
-    inclinationDeg: 55,
-    yawDeg: -88,
-    eccentricity: 0.2,
-    argumentOfPerigeeDeg: 166,
-  },
-  {
-    id: "sat-relay-3",
-    radius: 1.69,
-    speed: 0.028,
-    phase: 5.1,
-    inclinationDeg: 38,
-    yawDeg: -116,
-    eccentricity: 0.06,
-    argumentOfPerigeeDeg: 62,
-  },
-  {
-    id: "sat-relay-4",
-    radius: 2.28,
-    speed: 0.011,
-    phase: 0.15,
-    inclinationDeg: 63,
-    yawDeg: -92,
-    eccentricity: 0.28,
-    argumentOfPerigeeDeg: 236,
-  },
-];
+function idHash01(id: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < id.length; i += 1) {
+    h ^= id.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return ((h >>> 0) % 1_000_000) / 1_000_000;
+}
 
-const SATELLITE_PAIRS: SatellitePair[] = SATELLITE_SPECS.map((_, i, all) => ({
-  id: `sat-link-${i}-${(i + 1) % all.length}`,
-  aIndex: i,
-  bIndex: (i + 1) % all.length,
-  phase: 0.2 + i * 0.83,
-}));
+function jitter(id: string, amount: number): number {
+  return (idHash01(id) - 0.5) * 2 * amount;
+}
+
+type PlanePreset = {
+  count: number;
+  radius: number;
+  speed: number;
+  inclinationDeg: number;
+  yawDeg: number;
+  phaseOffset: number;
+  layer: SatelliteSpec["layer"];
+  eccentricityBase: number;
+  eccentricityJitter: number;
+  radiusJitter: number;
+  inclinationJitter: number;
+  yawJitter: number;
+  phaseJitterDeg: number;
+};
+
+const STYLE_PRESETS: Record<SatelliteArrayStyle, PlanePreset[]> = {
+  walker: [
+    {
+      count: 6,
+      radius: 2.04,
+      speed: 0.0162,
+      inclinationDeg: 42,
+      yawDeg: -114,
+      phaseOffset: 0.12,
+      layer: "core",
+      eccentricityBase: 0.032,
+      eccentricityJitter: 0.018,
+      radiusJitter: 0.03,
+      inclinationJitter: 2.2,
+      yawJitter: 1.8,
+      phaseJitterDeg: 4.5,
+    },
+    {
+      count: 6,
+      radius: 2.16,
+      speed: 0.0141,
+      inclinationDeg: 56,
+      yawDeg: -78,
+      phaseOffset: 0.45,
+      layer: "core",
+      eccentricityBase: 0.04,
+      eccentricityJitter: 0.02,
+      radiusJitter: 0.03,
+      inclinationJitter: 2.4,
+      yawJitter: 1.8,
+      phaseJitterDeg: 4.8,
+    },
+    {
+      count: 6,
+      radius: 2.27,
+      speed: 0.0124,
+      inclinationDeg: 65,
+      yawDeg: -44,
+      phaseOffset: 0.82,
+      layer: "outer",
+      eccentricityBase: 0.047,
+      eccentricityJitter: 0.021,
+      radiusJitter: 0.032,
+      inclinationJitter: 2.6,
+      yawJitter: 2.1,
+      phaseJitterDeg: 5.2,
+    },
+  ],
+  rosette: [
+    {
+      count: 4,
+      radius: 1.96,
+      speed: 0.0173,
+      inclinationDeg: 46,
+      yawDeg: -122,
+      phaseOffset: 0.11,
+      layer: "inner",
+      eccentricityBase: 0.018,
+      eccentricityJitter: 0.01,
+      radiusJitter: 0.028,
+      inclinationJitter: 2.1,
+      yawJitter: 2.2,
+      phaseJitterDeg: 4.2,
+    },
+    {
+      count: 4,
+      radius: 2.0,
+      speed: 0.0169,
+      inclinationDeg: 54,
+      yawDeg: -78,
+      phaseOffset: 0.53,
+      layer: "inner",
+      eccentricityBase: 0.022,
+      eccentricityJitter: 0.012,
+      radiusJitter: 0.028,
+      inclinationJitter: 2.1,
+      yawJitter: 2.2,
+      phaseJitterDeg: 4.4,
+    },
+    {
+      count: 4,
+      radius: 2.06,
+      speed: 0.0163,
+      inclinationDeg: 61,
+      yawDeg: -36,
+      phaseOffset: 0.94,
+      layer: "core",
+      eccentricityBase: 0.026,
+      eccentricityJitter: 0.013,
+      radiusJitter: 0.03,
+      inclinationJitter: 2.3,
+      yawJitter: 2.2,
+      phaseJitterDeg: 4.6,
+    },
+    {
+      count: 3,
+      radius: 2.3,
+      speed: 0.0122,
+      inclinationDeg: 36,
+      yawDeg: -100,
+      phaseOffset: 0.26,
+      layer: "outer",
+      eccentricityBase: 0.042,
+      eccentricityJitter: 0.018,
+      radiusJitter: 0.034,
+      inclinationJitter: 2.6,
+      yawJitter: 2.6,
+      phaseJitterDeg: 5,
+    },
+    {
+      count: 3,
+      radius: 2.34,
+      speed: 0.0119,
+      inclinationDeg: 43,
+      yawDeg: -58,
+      phaseOffset: 0.79,
+      layer: "outer",
+      eccentricityBase: 0.045,
+      eccentricityJitter: 0.02,
+      radiusJitter: 0.034,
+      inclinationJitter: 2.8,
+      yawJitter: 2.6,
+      phaseJitterDeg: 5.2,
+    },
+  ],
+  triad: [
+    {
+      count: 5,
+      radius: 2.07,
+      speed: 0.0149,
+      inclinationDeg: 44,
+      yawDeg: -108,
+      phaseOffset: 0.18,
+      layer: "core",
+      eccentricityBase: 0.036,
+      eccentricityJitter: 0.018,
+      radiusJitter: 0.03,
+      inclinationJitter: 2.4,
+      yawJitter: 2.1,
+      phaseJitterDeg: 4.8,
+    },
+    {
+      count: 5,
+      radius: 2.16,
+      speed: 0.0139,
+      inclinationDeg: 63,
+      yawDeg: -64,
+      phaseOffset: 0.66,
+      layer: "core",
+      eccentricityBase: 0.042,
+      eccentricityJitter: 0.019,
+      radiusJitter: 0.03,
+      inclinationJitter: 2.5,
+      yawJitter: 2.1,
+      phaseJitterDeg: 5,
+    },
+    {
+      count: 5,
+      radius: 2.24,
+      speed: 0.0128,
+      inclinationDeg: 52,
+      yawDeg: -20,
+      phaseOffset: 1.08,
+      layer: "outer",
+      eccentricityBase: 0.047,
+      eccentricityJitter: 0.02,
+      radiusJitter: 0.03,
+      inclinationJitter: 2.5,
+      yawJitter: 2.2,
+      phaseJitterDeg: 5.2,
+    },
+    {
+      count: 3,
+      radius: 2.37,
+      speed: 0.0108,
+      inclinationDeg: 72,
+      yawDeg: -88,
+      phaseOffset: 1.35,
+      layer: "drifter",
+      eccentricityBase: 0.13,
+      eccentricityJitter: 0.045,
+      radiusJitter: 0.036,
+      inclinationJitter: 2.8,
+      yawJitter: 2.8,
+      phaseJitterDeg: 5.8,
+    },
+  ],
+};
+
+function seedSpreadAngles(prefix: string, count: number, minGapRad: number): number[] {
+  if (count <= 1) return [0];
+  const base = Array.from({ length: count }, (_, i) => (i / count) * Math.PI * 2);
+  const result = [...base];
+  for (let i = 0; i < count; i += 1) {
+    let best = result[i];
+    let bestMinGap = -1;
+    const baseAngle = result[i];
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      const cand =
+        baseAngle + ((jitter(`${prefix}-phase-${i}-attempt-${attempt}`, 1) * Math.PI) / 180) * 7.5;
+      let localGap = Number.POSITIVE_INFINITY;
+      for (let j = 0; j < count; j += 1) {
+        if (j === i) continue;
+        const raw = Math.abs(cand - result[j]) % (Math.PI * 2);
+        const dist = Math.min(raw, Math.PI * 2 - raw);
+        localGap = Math.min(localGap, dist);
+      }
+      if (localGap > bestMinGap && localGap >= minGapRad * 0.72) {
+        best = cand;
+        bestMinGap = localGap;
+      }
+    }
+    result[i] = best;
+  }
+  return result;
+}
+
+function buildSpecsForStyle(styleVariant: SatelliteArrayStyle): SatelliteSpec[] {
+  const presets = STYLE_PRESETS[styleVariant];
+  const specs: SatelliteSpec[] = [];
+  presets.forEach((plane, p) => {
+    const phaseAngles = seedSpreadAngles(`${styleVariant}-plane-${p + 1}`, plane.count, 0.42);
+    for (let s = 0; s < plane.count; s += 1) {
+      const id = `${styleVariant}-p${p + 1}-s${s + 1}`;
+      specs.push({
+        id,
+        radius: plane.radius + jitter(`${id}-r`, plane.radiusJitter),
+        speed: plane.speed,
+        phase:
+          phaseAngles[s] + plane.phaseOffset + ((jitter(`${id}-phase-fine`, 1) * Math.PI) / 180) * 0.5,
+        inclinationDeg: plane.inclinationDeg + jitter(`${id}-inc`, plane.inclinationJitter),
+        yawDeg: plane.yawDeg + jitter(`${id}-yaw`, plane.yawJitter),
+        planeIndex: p,
+        slotIndex: s,
+        layer: plane.layer,
+        eccentricity: Math.max(0.006, plane.eccentricityBase + jitter(`${id}-ecc`, plane.eccentricityJitter)),
+        argumentOfPerigeeDeg: ((idHash01(`${id}-arg`) * 360) % 360 + 360) % 360,
+      });
+    }
+  });
+  return specs;
+}
+
+function buildSatelliteSpecs(styleVariant: SatelliteArrayStyle): SatelliteSpec[] {
+  return buildSpecsForStyle(styleVariant);
+}
+
+function buildSatelliteLinkCandidates(specs: SatelliteSpec[]): SatelliteLinkCandidate[] {
+  const referencePositions = specs.map((spec) => orbitPoint(spec, spec.phase, new Vector3()));
+  const seen = new Set<string>();
+  const candidates: SatelliteLinkCandidate[] = [];
+  const pushEdge = (aIndex: number, bIndex: number, kind: SatelliteLinkCandidate["kind"], score: number) => {
+    if (aIndex === bIndex) return;
+    const lo = Math.min(aIndex, bIndex);
+    const hi = Math.max(aIndex, bIndex);
+    const key = `${lo}-${hi}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    candidates.push({
+      id: `sat-link-${lo}-${hi}`,
+      aIndex: lo,
+      bIndex: hi,
+      phase: 0.17 + (lo + hi) * 0.31,
+      baseScore: score,
+      kind,
+    });
+  };
+
+  specs.forEach((spec, i) => {
+    const samePlane = specs
+      .map((other, j) => ({ j, other }))
+      .filter(({ j, other }) => j !== i && other.planeIndex === spec.planeIndex)
+      .sort((a, b) => a.other.slotIndex - b.other.slotIndex);
+    if (samePlane.length > 0) {
+      const next = samePlane[spec.slotIndex % samePlane.length];
+      pushEdge(i, next.j, "backbone", 2.2);
+    }
+    const neighbors = specs
+      .map((other, j) => ({ j, other }))
+      .filter(({ j }) => j !== i)
+      .map(({ j, other }) => {
+        const distance = referencePositions[i].distanceTo(referencePositions[j]);
+        const crossPlane = other.planeIndex === spec.planeIndex ? 0 : 1;
+        return { j, distance, crossPlane };
+      })
+      .sort((a, b) => a.distance - b.distance);
+    neighbors
+      .slice(0, 4)
+      .forEach(({ j, crossPlane }) => pushEdge(i, j, crossPlane ? "backbone" : "access", 1.4 + crossPlane * 0.7));
+    neighbors
+      .filter(({ crossPlane }) => crossPlane === 1)
+      .slice(0, 2)
+      .forEach(({ j }) => pushEdge(i, j, "backbone", 2.1));
+  });
+
+  return candidates;
+}
 
 const UP_AXIS = new Vector3(0, 1, 0);
 const ALT_AXIS = new Vector3(1, 0, 0);
@@ -118,8 +373,6 @@ const SIGNAL_ARC_LIFT = 0.16;
 const SIGNAL_CLEARANCE_RADIUS = 1.08;
 const SATELLITE_SPEED_SCALE = 1 / 6;
 const PLANET_BLOCK_RADIUS = 1.03;
-const ACTIVE_LINKS_PER_NODE = 2;
-const LOW_TIER_ACTIVE_LINKS_PER_NODE = 1;
 const ARC_REBUILD_INTERVAL_ACTIVE_SEC = 1 / 30;
 const ARC_REBUILD_INTERVAL_IDLE_SEC = 1 / 12;
 const ARC_REBUILD_EPSILON_SQ = 0.00002;
@@ -153,10 +406,31 @@ type GroupLikeObject = {
 const RF_LAYER_MULTIPATH_GAIN = 1.22;
 const RF_CHAOS_GAIN = 1.45;
 const PACKET_TRAVEL_SEC = 1.25;
+// Microwave ripple profile for "live" active links.
 const MICROWAVE_WAVE_CYCLES = 34;
 const MICROWAVE_WAVE_SPEED = 6.4;
 const MICROWAVE_WAVE_AMP = 0.0016;
 const MICROWAVE_WAVE_AMP_REDUCED = 0.0009;
+// Extra ripple gain when a link is marked as actively carrying path traffic.
+const MICROWAVE_ACTIVE_LINK_BOOST = 1.35;
+// Orbit-track rendering is split into this many segments for per-segment fading.
+const ORBIT_SEGMENT_COUNT = 96;
+// Higher values shorten the bright "recently traveled" trail.
+const ORBIT_TRAIL_DECAY = 2.7;
+// Active satellite orbit brightness floor + additive trail peak.
+const ORBIT_ACTIVE_BASE_OPACITY = 0.14;
+const ORBIT_ACTIVE_TRAIL_GAIN = 0.23;
+// Inactive satellite orbit brightness floor + additive trail peak.
+const ORBIT_INACTIVE_BASE_OPACITY = 0.022;
+const ORBIT_INACTIVE_TRAIL_GAIN = 0.072;
+const NETWORK_SOLVE_INTERVAL_SEC = 0.32;
+const NETWORK_SOLVE_INTERVAL_LOW_QUALITY_SEC = 0.48;
+const EDGE_PROMOTE_SCORE = 0.7;
+const EDGE_DEMOTE_SCORE = 0.47;
+const EDGE_TTL_SEC = 1.35;
+const BACKBONE_DEGREE_LIMIT = 4;
+const ACCESS_DEGREE_LIMIT = 2;
+const ACCESS_EDGES_PER_GATEWAY = 2;
 
 function clamp01(t: number) {
   return Math.max(0, Math.min(1, t));
@@ -377,6 +651,100 @@ function segmentClearsPlanet(start: Vector3, end: Vector3, blockRadius: number):
   return closest.lengthSq() > blockRadius * blockRadius;
 }
 
+function buildSatAdjacency(
+  activeEdgeIds: Set<string>,
+  linksById: Map<string, SatelliteLinkCandidate>,
+  satCount: number,
+) {
+  const adjacency = Array.from({ length: satCount }, () => new Map<number, string>());
+  activeEdgeIds.forEach((edgeId) => {
+    const edge = linksById.get(edgeId);
+    if (!edge) return;
+    adjacency[edge.aIndex].set(edge.bIndex, edgeId);
+    adjacency[edge.bIndex].set(edge.aIndex, edgeId);
+  });
+  return adjacency;
+}
+
+function satComponents(adjacency: Array<Map<number, string>>): number[][] {
+  const visited = new Set<number>();
+  const components: number[][] = [];
+  for (let i = 0; i < adjacency.length; i += 1) {
+    if (visited.has(i)) continue;
+    const stack = [i];
+    const component: number[] = [];
+    while (stack.length > 0) {
+      const node = stack.pop();
+      if (node === undefined || visited.has(node)) continue;
+      visited.add(node);
+      component.push(node);
+      adjacency[node].forEach((_, nextNode) => {
+        if (!visited.has(nextNode)) stack.push(nextNode);
+      });
+    }
+    components.push(component);
+  }
+  return components;
+}
+
+function shortestSatPathEdgeIds(
+  start: number,
+  goal: number,
+  adjacency: Array<Map<number, string>>,
+  linksById: Map<string, SatelliteLinkCandidate>,
+  satPositions: MutableRefObject<Vector3>[],
+): string[] {
+  if (start === goal) return [];
+  const n = adjacency.length;
+  const dist = Array.from({ length: n }, () => Number.POSITIVE_INFINITY);
+  const prevNode = Array.from({ length: n }, () => -1);
+  const prevEdge = Array.from({ length: n }, () => "");
+  const open = new Set<number>();
+  dist[start] = 0;
+  open.add(start);
+
+  while (open.size > 0) {
+    let current = -1;
+    let best = Number.POSITIVE_INFINITY;
+    open.forEach((candidate) => {
+      if (dist[candidate] < best) {
+        best = dist[candidate];
+        current = candidate;
+      }
+    });
+    if (current < 0) break;
+    open.delete(current);
+    if (current === goal) break;
+    adjacency[current].forEach((edgeId, nextNode) => {
+      const edge = linksById.get(edgeId);
+      if (!edge) return;
+      const weight =
+        satPositions[edge.aIndex].current.distanceTo(satPositions[edge.bIndex].current) +
+        (edge.kind === "access" ? 0.18 : 0);
+      const nextDist = dist[current] + weight;
+      if (nextDist < dist[nextNode]) {
+        dist[nextNode] = nextDist;
+        prevNode[nextNode] = current;
+        prevEdge[nextNode] = edgeId;
+        open.add(nextNode);
+      }
+    });
+  }
+
+  if (!Number.isFinite(dist[goal])) return [];
+  const path: string[] = [];
+  let node = goal;
+  while (node !== start) {
+    const edgeId = prevEdge[node];
+    const parent = prevNode[node];
+    if (!edgeId || parent < 0) return [];
+    path.push(edgeId);
+    node = parent;
+  }
+  path.reverse();
+  return path;
+}
+
 function SignalLine({
   startRef,
   endRef,
@@ -399,6 +767,7 @@ function SignalLine({
   rfLineWidth = 2.35,
   linkKey,
   activeLinkKeysRef,
+  activeNoiseLinkKeysRef,
   idleOpacity = 0.08,
   idleLineWidth = 0.2,
   requireActiveSatPair = false,
@@ -429,6 +798,7 @@ function SignalLine({
   rfLineWidth?: number;
   linkKey?: string;
   activeLinkKeysRef?: MutableRefObject<Set<string>>;
+  activeNoiseLinkKeysRef?: MutableRefObject<Set<string>>;
   idleOpacity?: number;
   idleLineWidth?: number;
   requireActiveSatPair?: boolean;
@@ -482,6 +852,8 @@ function SignalLine({
     const { clock, camera } = state;
     const t = clock.elapsedTime;
     const linkSelected = !linkKey || !activeLinkKeysRef || activeLinkKeysRef.current.has(linkKey);
+    const noiseSelected =
+      !linkKey || !activeNoiseLinkKeysRef || activeNoiseLinkKeysRef.current.has(linkKey);
     startTmpRef.current.copy(startRef.current);
     endTmpRef.current.copy(endRef.current);
     arcRebuildAccumRef.current += delta;
@@ -565,7 +937,8 @@ function SignalLine({
       const normal = tmpNormalRef.current.copy(base).normalize();
       if (normal.lengthSq() < 1e-6) normal.set(0, 1, 0);
       // Inter-satellite links read better with very tight microwave ripples.
-      const microwaveAmp = reducedMotion ? MICROWAVE_WAVE_AMP_REDUCED : MICROWAVE_WAVE_AMP;
+      const microwaveAmpBase = reducedMotion ? MICROWAVE_WAVE_AMP_REDUCED : MICROWAVE_WAVE_AMP;
+      const microwaveAmp = noiseSelected ? microwaveAmpBase * MICROWAVE_ACTIVE_LINK_BOOST : 0;
       const microwaveWave =
         Math.sin(2 * Math.PI * MICROWAVE_WAVE_CYCLES * s - timePhase * MICROWAVE_WAVE_SPEED + phase) *
         microwaveAmp;
@@ -604,9 +977,7 @@ function SignalLine({
       const flicker = 0;
       const baseOpacity = !linkSelected
         ? idleOpacity
-        : orbitStyle
-          ? 0.22
-          : solid
+        : solid
             ? 1
             : emphasize
               ? 0.82
@@ -739,7 +1110,18 @@ function SignalLine({
   );
 }
 
-export function OrbitalSatellites({ accentColor, reducedMotion, isMobile }: OrbitalSatellitesProps) {
+export function OrbitalSatellites({
+  accentColor,
+  reducedMotion,
+  isMobile,
+  styleVariant = "walker",
+}: OrbitalSatellitesProps) {
+  const satelliteSpecs = useMemo(() => buildSatelliteSpecs(styleVariant), [styleVariant]);
+  const satelliteLinks = useMemo(() => buildSatelliteLinkCandidates(satelliteSpecs), [satelliteSpecs]);
+  const linksById = useMemo(
+    () => new Map(satelliteLinks.map((link) => [link.id, link] as const)),
+    [satelliteLinks],
+  );
   const accent = useMemo(() => new Color().setStyle(accentColor), [accentColor]);
   const signalColor = useMemo(
     () => accent.clone().lerp(new Color("white"), 0.14),
@@ -764,90 +1146,330 @@ export function OrbitalSatellites({ accentColor, reducedMotion, isMobile }: Orbi
   }, []);
   const nodeAnchorEntries = useMemo(() => Array.from(nodeAnchors.entries()), [nodeAnchors]);
   const satPositionRefs = useMemo(
-    () => SATELLITE_SPECS.map(() => ({ current: new Vector3() })),
-    [],
+    () => satelliteSpecs.map(() => ({ current: new Vector3() })),
+    [satelliteSpecs],
   );
   const satMeshRefs = useRef<Array<Mesh | null>>([]);
-  const orbitLineRefs = useRef<Array<LineLikeObject | null>>([]);
+  const orbitSegmentLineRefs = useRef<Array<Array<LineLikeObject | null>>>(
+    satelliteSpecs.map(() => Array.from({ length: ORBIT_SEGMENT_COUNT }, () => null)),
+  );
+  const motionTickLineRefs = useRef<Array<LineLikeObject | null>>([]);
+  const motionTickPointsRef = useRef(
+    satelliteSpecs.map(() => [new Vector3(), new Vector3()] as [Vector3, Vector3]),
+  );
+  const motionTickPositionsRef = useRef(
+    satelliteSpecs.map(() => Array.from({ length: 2 * 3 }, () => 0)),
+  );
   const activeNodeLinkKeysRef = useRef<Set<string>>(new Set());
   const activeSatIndicesRef = useRef<Set<number>>(new Set());
+  const activeSatPairKeysRef = useRef<Set<string>>(new Set());
+  const activePathNoiseLinkKeysRef = useRef<Set<string>>(new Set());
+  const lastNodeGatewayRef = useRef<Map<string, number>>(new Map());
+  const edgeStickyUntilRef = useRef<Map<string, number>>(new Map());
+  const networkSolveElapsedRef = useRef(0);
+  const orbitAheadSampleRef = useRef(new Vector3());
+  const orbitDirectionRef = useRef(new Vector3());
+  const satThetaRef = useRef<number[]>(satelliteSpecs.map(() => 0));
   const orbitTrackPoints = useMemo(() => {
-    return SATELLITE_SPECS.map((spec) => {
+    return satelliteSpecs.map((spec) => {
       const points: Vector3[] = [];
-      for (let i = 0; i <= 96; i += 1) {
-        const theta = (i / 96) * Math.PI * 2;
+      for (let i = 0; i <= ORBIT_SEGMENT_COUNT; i += 1) {
+        const theta = (i / ORBIT_SEGMENT_COUNT) * Math.PI * 2;
         points.push(orbitPoint(spec, theta, new Vector3()));
       }
       return points;
     });
-  }, []);
+  }, [satelliteSpecs]);
+  const orbitTrackSegments = useMemo(
+    () =>
+      orbitTrackPoints.map((track) =>
+        Array.from({ length: ORBIT_SEGMENT_COUNT }, (_, i) => [track[i], track[i + 1]] as const),
+      ),
+    [orbitTrackPoints],
+  );
 
-  useFrame(({ clock }) => {
+  useFrame(({ clock }, delta) => {
     const t = clock.elapsedTime;
-    SATELLITE_SPECS.forEach((spec, i) => {
+    const tau = Math.PI * 2;
+    satelliteSpecs.forEach((spec, i) => {
       const omega = (reducedMotion ? spec.speed * 0.45 : spec.speed) * SATELLITE_SPEED_SCALE;
       const theta = t * omega * Math.PI * 2 + spec.phase;
+      satThetaRef.current[i] = ((theta % tau) + tau) % tau;
       orbitPoint(spec, theta, satPositionRefs[i].current);
       const satMesh = satMeshRefs.current[i];
       if (satMesh) {
         satMesh.position.copy(satPositionRefs[i].current);
-        const pulse = reducedMotion ? 1 : 1 + Math.sin(t * 2.9 + spec.phase) * 0.06;
+        const isActiveSat = activeSatIndicesRef.current.has(i);
+        const pulseAmp = reducedMotion ? 0.012 : isActiveSat ? 0.085 : 0.045;
+        const pulse = 1 + Math.sin(t * 2.9 + spec.phase) * pulseAmp;
         satMesh.scale.setScalar(pulse);
+      }
+      orbitPoint(spec, theta + 0.03, orbitAheadSampleRef.current);
+      orbitDirectionRef.current
+        .copy(orbitAheadSampleRef.current)
+        .sub(satPositionRefs[i].current)
+        .normalize();
+      const tickPoints = motionTickPointsRef.current[i];
+      tickPoints[0].copy(satPositionRefs[i].current).addScaledVector(orbitDirectionRef.current, 0.002);
+      tickPoints[1].copy(satPositionRefs[i].current).addScaledVector(orbitDirectionRef.current, -0.012);
+      setLineGeometryFromPoints(
+        { current: motionTickLineRefs.current[i] },
+        tickPoints,
+        motionTickPositionsRef.current[i],
+      );
+      const tickLine = motionTickLineRefs.current[i];
+      if (tickLine?.material) {
+        tickLine.material.opacity = lowQualityTier ? 0.08 : 0.14;
+        tickLine.material.linewidth = lowQualityTier ? 0.18 : 0.34;
       }
     });
 
-    const nextActive = new Set<string>();
-    const nextActiveSatIndices = new Set<number>();
-    for (const [anchorKey, targetRef] of nodeAnchorEntries) {
-      const candidates: Array<{ key: string; score: number; satIndex: number }> = [];
-      SATELLITE_SPECS.forEach((spec, satIndex) => {
-        const satPos = satPositionRefs[satIndex].current;
-        if (!segmentClearsPlanet(targetRef.current, satPos, PLANET_BLOCK_RADIUS)) return;
-        const distance = targetRef.current.distanceTo(satPos);
-        // Prefer short, high-clearance relay paths for "best connection" selection.
-        const altitudeBias = Math.max(0, satPos.length() - 1);
-        const score = 1 / Math.max(0.001, distance) + altitudeBias * 0.08;
-        candidates.push({
-          key: `${spec.id}-${anchorKey}-node-link`,
-          score,
-          satIndex,
+    networkSolveElapsedRef.current += delta;
+    const solveEvery = lowQualityTier ? NETWORK_SOLVE_INTERVAL_LOW_QUALITY_SEC : NETWORK_SOLVE_INTERVAL_SEC;
+    if (networkSolveElapsedRef.current >= solveEvery) {
+      networkSolveElapsedRef.current = 0;
+      const satDegreesBackbone = Array.from({ length: satelliteSpecs.length }, () => 0);
+      const satDegreesAccess = Array.from({ length: satelliteSpecs.length }, () => 0);
+      const sortedLinks = satelliteLinks
+        .map((link) => {
+          const a = satPositionRefs[link.aIndex].current;
+          const b = satPositionRefs[link.bIndex].current;
+          const distance = a.distanceTo(b);
+          const clear = segmentClearsPlanet(a, b, PLANET_BLOCK_RADIUS);
+          const score = link.baseScore + 1 / Math.max(0.001, distance);
+          const stickyUntil = edgeStickyUntilRef.current.get(link.id) ?? 0;
+          const currentlyActive = stickyUntil > t;
+          return { link, score, clear, currentlyActive };
+        })
+        .sort((a, b) => b.score - a.score);
+
+      const nextBackbone = new Set<string>();
+      sortedLinks.forEach((entry) => {
+        const { link, clear, score, currentlyActive } = entry;
+        if (link.kind !== "backbone" || !clear) return;
+        const limitA = satDegreesBackbone[link.aIndex];
+        const limitB = satDegreesBackbone[link.bIndex];
+        if (limitA >= BACKBONE_DEGREE_LIMIT || limitB >= BACKBONE_DEGREE_LIMIT) return;
+        const meetsThreshold = score >= EDGE_PROMOTE_SCORE || (currentlyActive && score >= EDGE_DEMOTE_SCORE);
+        if (!meetsThreshold) return;
+        nextBackbone.add(link.id);
+        satDegreesBackbone[link.aIndex] += 1;
+        satDegreesBackbone[link.bIndex] += 1;
+        edgeStickyUntilRef.current.set(link.id, t + EDGE_TTL_SEC);
+      });
+
+      const anchorAssignments: Array<{ key: string; satIndex: number; anchorKey: string }> = [];
+      const gatewaySatIndices = new Set<number>();
+      nodeAnchorEntries.forEach(([anchorKey, targetRef]) => {
+        const previousGateway = lastNodeGatewayRef.current.get(anchorKey);
+        const candidates = satelliteSpecs
+          .map((spec, satIndex) => {
+            const satPos = satPositionRefs[satIndex].current;
+            const clear = segmentClearsPlanet(targetRef.current, satPos, PLANET_BLOCK_RADIUS);
+            const distance = targetRef.current.distanceTo(satPos);
+            const altitudeBias = Math.max(0, satPos.length() - 1);
+            const stickiness = previousGateway === satIndex ? 0.12 : 0;
+            const score = (clear ? 1 : 0.45) * (1 / Math.max(0.001, distance)) + altitudeBias * 0.06 + stickiness;
+            return { satIndex, score };
+          })
+          .sort((a, b) => b.score - a.score);
+        if (candidates.length === 0) return;
+        const selected = candidates[0];
+        gatewaySatIndices.add(selected.satIndex);
+        lastNodeGatewayRef.current.set(anchorKey, selected.satIndex);
+        anchorAssignments.push({
+          key: `${satelliteSpecs[selected.satIndex].id}-${anchorKey}-node-link`,
+          satIndex: selected.satIndex,
+          anchorKey,
         });
       });
-      candidates.sort((a, b) => b.score - a.score);
-      const maxActiveLinks = lowQualityTier ? LOW_TIER_ACTIVE_LINKS_PER_NODE : ACTIVE_LINKS_PER_NODE;
-      for (let i = 0; i < Math.min(maxActiveLinks, candidates.length); i += 1) {
-        nextActive.add(candidates[i].key);
-        nextActiveSatIndices.add(candidates[i].satIndex);
-      }
-    }
-    activeNodeLinkKeysRef.current = nextActive;
-    activeSatIndicesRef.current = nextActiveSatIndices;
 
-    orbitLineRefs.current.forEach((orbitLine, satIndex) => {
-      if (!orbitLine?.material) return;
+      const repairBackbone = new Set(nextBackbone);
+      const degreeForRepair = [...satDegreesBackbone];
+      const findBridge = (
+        left: Set<number>,
+        right: Set<number>,
+      ): SatelliteLinkCandidate | null => {
+        let bestEdge: SatelliteLinkCandidate | null = null;
+        let bestScore = Number.NEGATIVE_INFINITY;
+        sortedLinks.forEach(({ link, clear, score }) => {
+          if (!clear || link.kind !== "backbone") return;
+          const splitCrosses =
+            (left.has(link.aIndex) && right.has(link.bIndex)) ||
+            (left.has(link.bIndex) && right.has(link.aIndex));
+          if (!splitCrosses) return;
+          if (
+            degreeForRepair[link.aIndex] >= BACKBONE_DEGREE_LIMIT ||
+            degreeForRepair[link.bIndex] >= BACKBONE_DEGREE_LIMIT
+          ) {
+            return;
+          }
+          if (score > bestScore) {
+            bestScore = score;
+            bestEdge = link;
+          }
+        });
+        return bestEdge;
+      };
+
+      let repairIterations = 0;
+      while (gatewaySatIndices.size > 1 && repairIterations < 6) {
+        repairIterations += 1;
+        const adjacency = buildSatAdjacency(repairBackbone, linksById, satelliteSpecs.length);
+        const comps = satComponents(adjacency);
+        const gatewayComps = comps
+          .map((comp) => new Set(comp.filter((sat) => gatewaySatIndices.has(sat))))
+          .filter((set) => set.size > 0);
+        if (gatewayComps.length <= 1) break;
+        const left = gatewayComps[0];
+        const right = new Set<number>();
+        for (let i = 1; i < gatewayComps.length; i += 1) {
+          gatewayComps[i].forEach((v) => right.add(v));
+        }
+        const bridge = findBridge(left, right);
+        if (!bridge) break;
+        repairBackbone.add(bridge.id);
+        degreeForRepair[bridge.aIndex] += 1;
+        degreeForRepair[bridge.bIndex] += 1;
+        edgeStickyUntilRef.current.set(bridge.id, t + EDGE_TTL_SEC);
+      }
+
+      const activeSatPairKeys = new Set<string>(repairBackbone);
+      const adjacency = buildSatAdjacency(activeSatPairKeys, linksById, satelliteSpecs.length);
+      const gatewayArray = Array.from(gatewaySatIndices);
+      for (let i = 0; i < gatewayArray.length; i += 1) {
+        for (let j = i + 1; j < gatewayArray.length; j += 1) {
+          const pathEdges = shortestSatPathEdgeIds(
+            gatewayArray[i],
+            gatewayArray[j],
+            adjacency,
+            linksById,
+            satPositionRefs,
+          );
+          pathEdges.forEach((edgeId) => activeSatPairKeys.add(edgeId));
+        }
+      }
+
+      const accessCandidates = sortedLinks.filter(({ link, clear }) => clear && link.kind === "access");
+      gatewayArray.forEach((gatewaySat) => {
+        let added = 0;
+        accessCandidates.forEach(({ link }) => {
+          if (added >= ACCESS_EDGES_PER_GATEWAY) return;
+          const connectedSat = link.aIndex === gatewaySat ? link.bIndex : link.bIndex === gatewaySat ? link.aIndex : -1;
+          if (connectedSat < 0) return;
+          if (
+            satDegreesAccess[link.aIndex] >= ACCESS_DEGREE_LIMIT ||
+            satDegreesAccess[link.bIndex] >= ACCESS_DEGREE_LIMIT
+          ) {
+            return;
+          }
+          activeSatPairKeys.add(link.id);
+          satDegreesAccess[link.aIndex] += 1;
+          satDegreesAccess[link.bIndex] += 1;
+          edgeStickyUntilRef.current.set(link.id, t + EDGE_TTL_SEC * 0.8);
+          added += 1;
+        });
+      });
+
+      const activeSatIndices = new Set<number>();
+      activeSatPairKeys.forEach((edgeId) => {
+        const edge = linksById.get(edgeId);
+        if (!edge) return;
+        activeSatIndices.add(edge.aIndex);
+        activeSatIndices.add(edge.bIndex);
+      });
+      anchorAssignments.forEach(({ satIndex }) => activeSatIndices.add(satIndex));
+      gatewaySatIndices.forEach((idx) => activeSatIndices.add(idx));
+
+      activeNodeLinkKeysRef.current = new Set(anchorAssignments.map((item) => item.key));
+      activeSatIndicesRef.current = activeSatIndices;
+      activeSatPairKeysRef.current = activeSatPairKeys;
+
+      const adjacencyByNode = new Map<string, Set<string>>();
+      const edgeEndpoints = new Map<string, [string, string]>();
+      const touch = (id: string) => {
+        if (!adjacencyByNode.has(id)) adjacencyByNode.set(id, new Set());
+      };
+      const linkNodes = (a: string, b: string, edgeKey: string) => {
+        touch(a);
+        touch(b);
+        adjacencyByNode.get(a)?.add(b);
+        adjacencyByNode.get(b)?.add(a);
+        edgeEndpoints.set(edgeKey, [a, b]);
+      };
+      anchorAssignments.forEach(({ key, satIndex, anchorKey }) => {
+        linkNodes(`g:${anchorKey}`, `s:${satIndex}`, key);
+      });
+      activeSatPairKeys.forEach((edgeKey) => {
+        const edge = linksById.get(edgeKey);
+        if (!edge) return;
+        linkNodes(`s:${edge.aIndex}`, `s:${edge.bIndex}`, edgeKey);
+      });
+      const noisyEdgeKeys = new Set<string>();
+      const visited = new Set<string>();
+      adjacencyByNode.forEach((_, startNode) => {
+        if (visited.has(startNode)) return;
+        const stack = [startNode];
+        const componentNodes: string[] = [];
+        while (stack.length > 0) {
+          const node = stack.pop();
+          if (!node || visited.has(node)) continue;
+          visited.add(node);
+          componentNodes.push(node);
+          adjacencyByNode.get(node)?.forEach((nextNode) => {
+            if (!visited.has(nextNode)) stack.push(nextNode);
+          });
+        }
+        const groundCount = componentNodes.reduce(
+          (sum, nodeId) => sum + (nodeId.startsWith("g:") ? 1 : 0),
+          0,
+        );
+        if (groundCount < 2) return;
+        const nodeSet = new Set(componentNodes);
+        edgeEndpoints.forEach(([a, b], edgeKey) => {
+          if (nodeSet.has(a) && nodeSet.has(b)) noisyEdgeKeys.add(edgeKey);
+        });
+      });
+      activePathNoiseLinkKeysRef.current = noisyEdgeKeys;
+    }
+
+    const segmentAngle = tau / ORBIT_SEGMENT_COUNT;
+    orbitSegmentLineRefs.current.forEach((segmentLines, satIndex) => {
       const isActiveSat = activeSatIndicesRef.current.has(satIndex);
-      orbitLine.material.opacity = isActiveSat ? 0.22 : 0.06;
+      const thetaNow = satThetaRef.current[satIndex] ?? 0;
+      const baseOpacity = isActiveSat ? ORBIT_ACTIVE_BASE_OPACITY : ORBIT_INACTIVE_BASE_OPACITY;
+      const trailGain = isActiveSat ? ORBIT_ACTIVE_TRAIL_GAIN : ORBIT_INACTIVE_TRAIL_GAIN;
+      segmentLines.forEach((orbitLine, segmentIndex) => {
+        if (!orbitLine?.material) return;
+        const segmentCenterTheta = (segmentIndex + 0.5) * segmentAngle;
+        const behindDistance = (thetaNow - segmentCenterTheta + tau) % tau;
+        const trailStrength = Math.exp(-behindDistance * ORBIT_TRAIL_DECAY);
+        orbitLine.material.opacity = baseOpacity + trailGain * trailStrength;
+      });
     });
   });
 
   return (
     <group>
-      {orbitTrackPoints.map((track, i) => (
-        <Line
-          key={`${SATELLITE_SPECS[i].id}-orbit`}
-          ref={(node) => {
-            orbitLineRefs.current[i] = node;
-          }}
-          points={track}
-          color={signalColor}
-          transparent
-          opacity={0.22}
-          lineWidth={0.8}
-          depthTest
-        />
-      ))}
+      {orbitTrackSegments.map((segments, satIndex) =>
+        segments.map((segmentPoints, segmentIndex) => (
+          <Line
+            key={`${satelliteSpecs[satIndex].id}-orbit-segment-${segmentIndex}`}
+            ref={(node) => {
+              orbitSegmentLineRefs.current[satIndex][segmentIndex] =
+                node as unknown as LineLikeObject | null;
+            }}
+            points={segmentPoints}
+            color={signalColor}
+            transparent
+            opacity={ORBIT_INACTIVE_BASE_OPACITY}
+            lineWidth={0.8}
+            depthTest
+          />
+        )),
+      )}
 
-      {SATELLITE_SPECS.map((spec, i) => (
+      {satelliteSpecs.map((spec, i) => (
         <mesh
           key={`${spec.id}-body`}
           ref={(node) => {
@@ -866,8 +1488,23 @@ export function OrbitalSatellites({ accentColor, reducedMotion, isMobile }: Orbi
           />
         </mesh>
       ))}
+      {satelliteSpecs.map((spec, i) => (
+        <Line
+          key={`${spec.id}-motion-tick`}
+          ref={(node) => {
+            motionTickLineRefs.current[i] = node as unknown as LineLikeObject | null;
+          }}
+          points={INITIAL_LINE_POINTS}
+          color={signalColor}
+          transparent
+          opacity={0.14}
+          lineWidth={0.34}
+          depthTest
+          depthWrite={false}
+        />
+      ))}
 
-      {SATELLITE_SPECS.map((spec, satIndex) =>
+      {satelliteSpecs.map((spec, satIndex) =>
         nodeAnchorEntries.map(([anchorKey, targetRef], anchorIndex) => (
           <SignalLine
             key={`${spec.id}-${anchorKey}-node-link`}
@@ -879,12 +1516,14 @@ export function OrbitalSatellites({ accentColor, reducedMotion, isMobile }: Orbi
             straight
             depthOcclude
             requireClearPath
+            microwaveStyle
             signalOpacity={0.34}
             signalLineWidth={0.95}
             rfOpacity={0.58}
             rfLineWidth={0.95}
             linkKey={`${spec.id}-${anchorKey}-node-link`}
             activeLinkKeysRef={activeNodeLinkKeysRef}
+            activeNoiseLinkKeysRef={activePathNoiseLinkKeysRef}
             idleOpacity={0.07}
             idleLineWidth={0.14}
             lowQuality={lowQualityTier}
@@ -892,29 +1531,29 @@ export function OrbitalSatellites({ accentColor, reducedMotion, isMobile }: Orbi
         )),
       )}
 
-      {!lowQualityTier
-        ? SATELLITE_PAIRS.map((pair) => (
-            <SignalLine
-              key={pair.id}
-              startRef={satPositionRefs[pair.aIndex]}
-              endRef={satPositionRefs[pair.bIndex]}
-              phase={pair.phase}
-              signalColor={signalColor}
-              reducedMotion={reducedMotion}
-              alwaysVisible
-              straight
-              requireClearPath
-              requireFullLineVisible
-              orbitStyle
+      {satelliteLinks.map((pair) => (
+        <SignalLine
+          key={pair.id}
+          startRef={satPositionRefs[pair.aIndex]}
+          endRef={satPositionRefs[pair.bIndex]}
+          phase={pair.phase}
+          signalColor={signalColor}
+          reducedMotion={reducedMotion}
+          alwaysVisible
+          straight
+          requireClearPath
+          orbitStyle
           microwaveStyle
-              requireActiveSatPair
-              activeSatIndicesRef={activeSatIndicesRef}
-              satPairAIndex={pair.aIndex}
-              satPairBIndex={pair.bIndex}
-              lowQuality={lowQualityTier}
-            />
-          ))
-        : null}
+          signalOpacity={0.34}
+          rfOpacity={0.58}
+          linkKey={pair.id}
+          activeLinkKeysRef={activeSatPairKeysRef}
+          activeNoiseLinkKeysRef={activePathNoiseLinkKeysRef}
+          idleOpacity={0}
+          idleLineWidth={0}
+          lowQuality={lowQualityTier}
+        />
+      ))}
     </group>
   );
 }
