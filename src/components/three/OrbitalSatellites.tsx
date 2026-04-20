@@ -113,7 +113,7 @@ const SATELLITE_PAIRS: SatellitePair[] = SATELLITE_SPECS.map((_, i, all) => ({
 
 const UP_AXIS = new Vector3(0, 1, 0);
 const ALT_AXIS = new Vector3(1, 0, 0);
-const SIGNAL_ARC_SEGMENTS = 18;
+const SIGNAL_ARC_SEGMENTS = 28;
 const SIGNAL_ARC_LIFT = 0.16;
 const SIGNAL_CLEARANCE_RADIUS = 1.08;
 const SATELLITE_SPEED_SCALE = 1 / 6;
@@ -153,6 +153,10 @@ type GroupLikeObject = {
 const RF_LAYER_MULTIPATH_GAIN = 1.22;
 const RF_CHAOS_GAIN = 1.45;
 const PACKET_TRAVEL_SEC = 1.25;
+const MICROWAVE_WAVE_CYCLES = 34;
+const MICROWAVE_WAVE_SPEED = 6.4;
+const MICROWAVE_WAVE_AMP = 0.0016;
+const MICROWAVE_WAVE_AMP_REDUCED = 0.0009;
 
 function clamp01(t: number) {
   return Math.max(0, Math.min(1, t));
@@ -402,6 +406,7 @@ function SignalLine({
   satPairAIndex,
   satPairBIndex,
   lowQuality = false,
+  microwaveStyle = false,
 }: {
   startRef: MutableRefObject<Vector3>;
   endRef: MutableRefObject<Vector3>;
@@ -431,6 +436,7 @@ function SignalLine({
   satPairAIndex?: number;
   satPairBIndex?: number;
   lowQuality?: boolean;
+  microwaveStyle?: boolean;
 }) {
   const signalLineRef = useRef<LineLikeObject | null>(null);
   const rfLineRef = useRef<LineLikeObject | null>(null);
@@ -558,17 +564,39 @@ function SignalLine({
       const tangent = tmpTangentRef.current.copy(next).sub(prev).normalize();
       const normal = tmpNormalRef.current.copy(base).normalize();
       if (normal.lengthSq() < 1e-6) normal.set(0, 1, 0);
-      // Sat->ground links use a scaled-down version of the main RF connector profile,
-      // but with enough displacement to visibly read as an active signal.
-      const rfLayer = rfLayerNormalOffset(s, phase, timePhase, spatialPhase) * 0.082;
-      const burst = straightBurstNormalOffset(s, packetCenter, phase, burstShape) * 0.094;
+      // Inter-satellite links read better with very tight microwave ripples.
+      const microwaveAmp = reducedMotion ? MICROWAVE_WAVE_AMP_REDUCED : MICROWAVE_WAVE_AMP;
+      const microwaveWave =
+        Math.sin(2 * Math.PI * MICROWAVE_WAVE_CYCLES * s - timePhase * MICROWAVE_WAVE_SPEED + phase) *
+        microwaveAmp;
+      const microwaveBeat =
+        Math.sin(
+          2 *
+            Math.PI *
+            (MICROWAVE_WAVE_CYCLES * 0.37) *
+            s +
+            timePhase * (MICROWAVE_WAVE_SPEED * 0.72) +
+            phase * 1.3,
+        ) *
+        (microwaveAmp * 0.45);
+
+      // Sat->ground links keep a stronger RF profile; inter-satellite uses subtle microwave offsets.
+      const rfLayer = microwaveStyle
+        ? microwaveWave + microwaveBeat
+        : rfLayerNormalOffset(s, phase, timePhase, spatialPhase) * 0.082;
+      const burst = microwaveStyle
+        ? 0
+        : straightBurstNormalOffset(s, packetCenter, phase, burstShape) * 0.094;
       const mixedOffset = rfLayer + burst;
       rfPoints[i]
         .copy(base)
         .addScaledVector(normal, mixedOffset)
-        .addScaledVector(tangent, Math.abs(burst) * 0.0065);
+        .addScaledVector(tangent, microwaveStyle ? microwaveWave * 0.15 : Math.abs(burst) * 0.0065);
     }
-    if (shouldRebuildArc || linkSelected) {
+    if (microwaveStyle) {
+      setLineGeometryFromPoints(signalLineRef, rfPoints, linePositionsRef.current);
+    }
+    if (shouldRebuildArc || linkSelected || microwaveStyle) {
       setLineGeometryFromPoints(rfLineRef, rfPoints, rfLinePositionsRef.current);
     }
 
@@ -590,7 +618,7 @@ function SignalLine({
     }
     if (rfLineRef.current?.material) {
       rfLineRef.current.material.opacity =
-        lineVisible && linkSelected ? (solid || orbitStyle ? 0 : rfOpacity) : 0;
+        lineVisible && linkSelected ? (solid || (orbitStyle && !microwaveStyle) ? 0 : rfOpacity) : 0;
       if (!orbitStyle && !solid) {
         rfLineRef.current.material.linewidth = linkSelected ? rfLineWidth : idleLineWidth;
       }
@@ -827,7 +855,7 @@ export function OrbitalSatellites({ accentColor, reducedMotion, isMobile }: Orbi
           }}
           raycast={() => null}
         >
-          <sphereGeometry args={[0.0155, 14, 14]} />
+          <sphereGeometry args={[0.0105, 14, 14]} />
           <meshBasicMaterial
             color={signalColor}
             toneMapped={false}
@@ -878,6 +906,7 @@ export function OrbitalSatellites({ accentColor, reducedMotion, isMobile }: Orbi
               requireClearPath
               requireFullLineVisible
               orbitStyle
+          microwaveStyle
               requireActiveSatPair
               activeSatIndicesRef={activeSatIndicesRef}
               satPairAIndex={pair.aIndex}

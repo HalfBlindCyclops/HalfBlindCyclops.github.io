@@ -505,6 +505,7 @@ export function GlobeExperience() {
   /** Two-phase switch: hide signal line first, then commit node swap next frame. */
   const [connectorPathsActive, setConnectorPathsActive] = useState(true);
   const switchRafRef = useRef<number | null>(null);
+  const hoverCloseTimeoutRef = useRef<number | null>(null);
   /** Desktop: resume panel + connector overlay the right side; globe renders full-viewport (no canvas clip). */
   const isSplitView = !isMobile;
   /** Match split-view globe framing so top UI anchors to globe center. */
@@ -522,15 +523,9 @@ export function GlobeExperience() {
   const RESUME_PANEL_LIFT_PCT = 4;
   const resumePanelTopPercent = Math.max(10, streamStartYPercent - RESUME_PANEL_LIFT_PCT);
   const splitPanelBaseTop = `calc(${resumePanelTopPercent}% + 1rem)`;
-  const useTopTabStackLayout = isSplitView && (isProjectsSelected || isExperienceSelected);
-  // Hover trays no longer reserve persistent space; keep panel near the connector.
   const splitPanelTop = `max(${splitPanelBaseTop}, 11rem)`;
-  const splitPanelLeft = useTopTabStackLayout
-    ? splitViewNavCenterX
-    : `calc(${CONNECTOR_LINE_END_PCT}% + 0.5rem)`;
-  const splitPanelWidth = useTopTabStackLayout
-    ? "min(40rem, calc(100% - 2rem))"
-    : `min(52rem, calc(100% - ${CONNECTOR_LINE_END_PCT}% - 1.25rem))`;
+  const splitPanelLeft = `calc(${CONNECTOR_LINE_END_PCT}% + 0.5rem)`;
+  const splitPanelWidth = `min(52rem, calc(100% - ${CONNECTOR_LINE_END_PCT}% - 1.25rem))`;
   // Horizontal beam is h-[2px] with top at streamStartY — center is 1px lower (same coords as SVG viewBox %).
   const streamJunctionYPercent = Math.min(
     100,
@@ -554,9 +549,30 @@ export function GlobeExperience() {
       if (switchRafRef.current !== null) {
         cancelAnimationFrame(switchRafRef.current);
       }
+      if (hoverCloseTimeoutRef.current !== null) {
+        window.clearTimeout(hoverCloseTimeoutRef.current);
+      }
     },
     [],
   );
+
+  const openHoverTray = (id: string) => {
+    if (hoverCloseTimeoutRef.current !== null) {
+      window.clearTimeout(hoverCloseTimeoutRef.current);
+      hoverCloseTimeoutRef.current = null;
+    }
+    setHoveredSectionId(id);
+  };
+
+  const closeHoverTraySoon = (id: string) => {
+    if (hoverCloseTimeoutRef.current !== null) {
+      window.clearTimeout(hoverCloseTimeoutRef.current);
+    }
+    hoverCloseTimeoutRef.current = window.setTimeout(() => {
+      setHoveredSectionId((current) => (current === id ? null : current));
+      hoverCloseTimeoutRef.current = null;
+    }, 180);
+  };
 
   const onSelectNode = (node: ResumeNode) => {
     if (selectedNode?.id === node.id) return;
@@ -748,49 +764,92 @@ export function GlobeExperience() {
           >
             {resumeNodes.map((node) => {
               const isActive = activeNodeId === node.id;
+              const isExpandable = node.id === "experience" || node.id === "projects";
+              const isMenuOpen =
+                (node.id === "experience" && showExperienceHoverMenu) ||
+                (node.id === "projects" && showProjectsHoverMenu);
+              const nodeGlowColor =
+                node.id === "experience"
+                  ? "rgba(56, 189, 248, 0.5)"
+                  : node.id === "projects"
+                    ? "rgba(167, 139, 250, 0.5)"
+                    : colorToRgba(ACCENT_COLOR_HEX, 0.4);
+              const buttonStyle = isActive
+                ? {
+                    borderColor: colorToRgba(ACCENT_COLOR_HEX, 0.88),
+                    backgroundImage: `linear-gradient(135deg, ${colorToRgba(ACCENT_COLOR_HEX, 0.32)} 0%, ${colorToRgba(ACCENT_COLOR_HEX, 0.14)} 52%, rgba(15, 23, 42, 0.95) 100%)`,
+                    color: "rgb(248, 250, 252)",
+                    boxShadow: `0 0 0 1px ${colorToRgba(ACCENT_COLOR_HEX, 0.45)} inset, 0 0 28px ${colorToRgba(ACCENT_COLOR_HEX, 0.24)}, 0 10px 36px rgba(2, 6, 23, 0.55)`,
+                  }
+                : {
+                    borderColor: isExpandable ? "rgba(148, 163, 184, 0.42)" : "rgba(255, 255, 255, 0.24)",
+                    backgroundImage: isExpandable
+                      ? "linear-gradient(135deg, rgba(30, 41, 59, 0.82) 0%, rgba(15, 23, 42, 0.88) 55%, rgba(2, 6, 23, 0.94) 100%)"
+                      : "linear-gradient(135deg, rgba(30, 41, 59, 0.7) 0%, rgba(15, 23, 42, 0.78) 100%)",
+                    color: "rgb(226, 232, 240)",
+                    boxShadow: "0 10px 24px rgba(2, 6, 23, 0.38)",
+                  };
               return (
                 <div
                   key={node.id}
                   className="relative"
-                  onMouseEnter={() => setHoveredSectionId(node.id)}
-                  onMouseLeave={() => setHoveredSectionId((current) => (current === node.id ? null : current))}
+                  onMouseEnter={() => openHoverTray(node.id)}
+                  onMouseLeave={() => closeHoverTraySoon(node.id)}
                 >
                   <button
                     type="button"
                     onClick={() => onSelectNode(node)}
-                    className="min-h-10 shrink-0 rounded-full border px-4 py-2 text-sm font-medium backdrop-blur-md transition"
-                    style={
-                      isActive
-                        ? {
-                            borderColor: colorToRgba(ACCENT_COLOR_HEX, 0.78),
-                            backgroundColor: colorToRgba(ACCENT_COLOR_HEX, 0.18),
-                            color: "rgb(248, 250, 252)",
-                            boxShadow: `0 0 20px ${colorToRgba(ACCENT_COLOR_HEX, 0.16)}`,
-                          }
-                        : {
-                            borderColor: "rgba(255, 255, 255, 0.2)",
-                            backgroundColor: "rgba(15, 23, 42, 0.55)",
-                            color: "rgb(241, 245, 249)",
-                          }
-                    }
-                    onMouseEnter={(e) => {
-                      if (activeNodeId === node.id) return;
-                      e.currentTarget.style.borderColor = colorToRgba(ACCENT_COLOR_HEX, 0.5);
-                      e.currentTarget.style.backgroundColor = "rgba(30, 41, 59, 0.7)";
-                    }}
-                    onMouseLeave={(e) => {
-                      if (activeNodeId === node.id) return;
-                      e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.2)";
-                      e.currentTarget.style.backgroundColor = "rgba(15, 23, 42, 0.55)";
-                    }}
+                    onFocus={() => openHoverTray(node.id)}
+                    className="group relative isolate min-h-11 shrink-0 overflow-hidden rounded-full border px-4 py-2 text-sm font-semibold tracking-[0.01em] backdrop-blur-xl transition-all duration-300 hover:-translate-y-[1px] hover:scale-[1.02] hover:border-sky-300/60 hover:text-white hover:shadow-[0_0_0_1px_rgba(125,211,252,0.34)_inset,0_16px_34px_rgba(2,6,23,0.5)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70 focus-visible:ring-offset-0 active:translate-y-0 active:scale-[0.99]"
+                    style={buttonStyle}
                   >
-                    {node.title}
+                    <span
+                      aria-hidden
+                      className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+                      style={{
+                        backgroundImage: `radial-gradient(circle at 20% 20%, ${nodeGlowColor} 0%, rgba(15, 23, 42, 0) 58%)`,
+                      }}
+                    />
+                    <span className="relative inline-flex items-center gap-2">
+                      {isExpandable ? (
+                        <span
+                          className="h-1.5 w-1.5 rounded-full transition-all duration-300"
+                          style={{
+                            backgroundColor: isMenuOpen ? "rgba(224, 242, 254, 0.96)" : "rgba(148, 163, 184, 0.8)",
+                            boxShadow: isMenuOpen
+                              ? `0 0 0 3px ${colorToRgba(ACCENT_COLOR_HEX, 0.24)}, 0 0 14px ${nodeGlowColor}`
+                              : "none",
+                          }}
+                        />
+                      ) : null}
+                      <span>{node.title}</span>
+                      {isExpandable ? (
+                        <svg
+                          aria-hidden
+                          viewBox="0 0 20 20"
+                          className={`h-3.5 w-3.5 transition-transform duration-300 ${
+                            isMenuOpen
+                              ? "translate-y-[1px] rotate-180 scale-110"
+                              : "translate-y-[1px] group-hover:translate-y-[2px]"
+                          }`}
+                        >
+                          <path
+                            d="M5 7.5l5 5 5-5"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="1.9"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
+                      ) : null}
+                    </span>
                   </button>
                   {node.id === "experience" ? (
                     <AnimatePresence>
                       {showExperienceHoverMenu ? (
                         <motion.div
-                          className="pointer-events-auto absolute left-1/2 top-full mt-3 w-[min(96vw,36rem)] -translate-x-1/2 overflow-y-auto rounded-3xl border border-white/20 bg-slate-950/78 p-3.5 shadow-[0_20px_60px_rgba(2,6,23,0.55)] backdrop-blur-xl md:w-[34rem]"
+                          className="pointer-events-auto absolute left-1/2 top-full mt-2 w-[min(96vw,36rem)] -translate-x-1/2 overflow-y-auto rounded-3xl border border-white/20 bg-slate-950/78 p-3.5 shadow-[0_20px_60px_rgba(2,6,23,0.55)] backdrop-blur-xl md:w-[34rem]"
                           initial={{ opacity: 0, y: -8, x: 10 }}
                           animate={{ opacity: 1, y: 0, x: 0 }}
                           exit={{ opacity: 0, y: -6, x: 8 }}
@@ -812,23 +871,32 @@ export function GlobeExperience() {
                                   key={miniNode.id}
                                   type="button"
                                   onClick={() => onSelectExperienceMiniNode(miniNode.id)}
-                                  className="rounded-xl border px-3 py-2.5 text-left text-xs font-medium leading-snug shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] transition duration-200 hover:-translate-y-0.5 hover:brightness-110 md:text-[0.8rem]"
+                                  className="group relative overflow-hidden rounded-2xl border px-3 py-2.5 text-left text-xs font-semibold leading-snug shadow-[inset_0_1px_0_rgba(255,255,255,0.1)] transition-all duration-300 hover:-translate-y-0.5 hover:border-sky-300/60 hover:text-white hover:shadow-[0_0_0_1px_rgba(125,211,252,0.25)_inset,0_14px_28px_rgba(2,6,23,0.42)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70 md:text-[0.8rem]"
                                   style={
                                     isMiniActive
                                       ? {
                                           borderColor: colorToRgba(ACCENT_COLOR_HEX, 0.88),
-                                          backgroundColor: colorToRgba(ACCENT_COLOR_HEX, 0.22),
+                                          backgroundImage: `linear-gradient(140deg, ${colorToRgba(ACCENT_COLOR_HEX, 0.3)} 0%, ${colorToRgba(ACCENT_COLOR_HEX, 0.16)} 55%, rgba(15, 23, 42, 0.94) 100%)`,
                                           color: "rgb(240, 249, 255)",
-                                          boxShadow: `0 0 0 1px ${colorToRgba(ACCENT_COLOR_HEX, 0.35)} inset, 0 10px 28px ${colorToRgba(ACCENT_COLOR_HEX, 0.18)}`,
+                                          boxShadow: `0 0 0 1px ${colorToRgba(ACCENT_COLOR_HEX, 0.35)} inset, 0 12px 30px ${colorToRgba(ACCENT_COLOR_HEX, 0.2)}`,
                                         }
                                       : {
-                                          borderColor: "rgba(148, 163, 184, 0.32)",
-                                          backgroundColor: "rgba(15, 23, 42, 0.72)",
+                                          borderColor: "rgba(148, 163, 184, 0.4)",
+                                          backgroundImage:
+                                            "linear-gradient(140deg, rgba(30, 41, 59, 0.82) 0%, rgba(15, 23, 42, 0.92) 100%)",
                                           color: "rgb(226, 232, 240)",
                                         }
                                   }
                                 >
-                                  {miniNode.title}
+                                  <span className="relative z-10">{miniNode.title}</span>
+                                  <span
+                                    aria-hidden
+                                    className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+                                    style={{
+                                      backgroundImage:
+                                        "radial-gradient(circle at 20% 18%, rgba(56, 189, 248, 0.26) 0%, rgba(15, 23, 42, 0) 56%)",
+                                    }}
+                                  />
                                 </button>
                               );
                             })}
@@ -841,7 +909,7 @@ export function GlobeExperience() {
                     <AnimatePresence>
                       {showProjectsHoverMenu ? (
                         <motion.div
-                          className="pointer-events-auto absolute left-1/2 top-full mt-3 max-h-[min(70dvh,30rem)] w-[min(96vw,46rem)] -translate-x-1/2 overflow-y-auto rounded-3xl border border-white/20 bg-slate-950/78 p-3.5 shadow-[0_20px_60px_rgba(2,6,23,0.55)] backdrop-blur-xl md:max-h-[calc(100dvh-7rem)] md:w-[42rem]"
+                          className="pointer-events-auto absolute left-1/2 top-full mt-2 max-h-[min(70dvh,30rem)] w-[min(96vw,46rem)] -translate-x-1/2 overflow-y-auto rounded-3xl border border-white/20 bg-slate-950/78 p-3.5 shadow-[0_20px_60px_rgba(2,6,23,0.55)] backdrop-blur-xl md:max-h-[calc(100dvh-7rem)] md:w-[42rem]"
                           initial={{ opacity: 0, y: -8, x: -10 }}
                           animate={{ opacity: 1, y: 0, x: 0 }}
                           exit={{ opacity: 0, y: -6, x: -8 }}
@@ -863,23 +931,32 @@ export function GlobeExperience() {
                                   key={miniNode.id}
                                   type="button"
                                   onClick={() => onSelectProjectMiniNode(miniNode.id)}
-                                  className="rounded-xl border px-3 py-2.5 text-left text-xs font-medium leading-snug shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] transition duration-200 hover:-translate-y-0.5 hover:brightness-110 md:text-[0.8rem]"
+                                  className="group relative overflow-hidden rounded-2xl border px-3 py-2.5 text-left text-xs font-semibold leading-snug shadow-[inset_0_1px_0_rgba(255,255,255,0.1)] transition-all duration-300 hover:-translate-y-0.5 hover:border-violet-300/65 hover:text-white hover:shadow-[0_0_0_1px_rgba(196,181,253,0.24)_inset,0_14px_28px_rgba(2,6,23,0.42)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/80 md:text-[0.8rem]"
                                   style={
                                     isMiniActive
                                       ? {
                                           borderColor: colorToRgba(ACCENT_COLOR_HEX, 0.88),
-                                          backgroundColor: colorToRgba(ACCENT_COLOR_HEX, 0.22),
+                                          backgroundImage: `linear-gradient(140deg, ${colorToRgba(ACCENT_COLOR_HEX, 0.3)} 0%, ${colorToRgba(ACCENT_COLOR_HEX, 0.16)} 55%, rgba(15, 23, 42, 0.94) 100%)`,
                                           color: "rgb(240, 249, 255)",
-                                          boxShadow: `0 0 0 1px ${colorToRgba(ACCENT_COLOR_HEX, 0.35)} inset, 0 10px 28px ${colorToRgba(ACCENT_COLOR_HEX, 0.18)}`,
+                                          boxShadow: `0 0 0 1px ${colorToRgba(ACCENT_COLOR_HEX, 0.35)} inset, 0 12px 30px ${colorToRgba(ACCENT_COLOR_HEX, 0.2)}`,
                                         }
                                       : {
-                                          borderColor: "rgba(148, 163, 184, 0.32)",
-                                          backgroundColor: "rgba(15, 23, 42, 0.72)",
+                                          borderColor: "rgba(148, 163, 184, 0.4)",
+                                          backgroundImage:
+                                            "linear-gradient(140deg, rgba(30, 41, 59, 0.82) 0%, rgba(15, 23, 42, 0.92) 100%)",
                                           color: "rgb(226, 232, 240)",
                                         }
                                   }
                                 >
-                                  {miniNode.title}
+                                  <span className="relative z-10">{miniNode.title}</span>
+                                  <span
+                                    aria-hidden
+                                    className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+                                    style={{
+                                      backgroundImage:
+                                        "radial-gradient(circle at 20% 18%, rgba(167, 139, 250, 0.26) 0%, rgba(15, 23, 42, 0) 56%)",
+                                    }}
+                                  />
                                 </button>
                               );
                             })}
@@ -916,7 +993,7 @@ export function GlobeExperience() {
         splitViewPanelTop={splitPanelTop}
         splitViewPanelLeft={splitPanelLeft}
         splitViewPanelWidth={splitPanelWidth}
-        splitViewPanelCenter={useTopTabStackLayout}
+        splitViewPanelCenter={false}
         activeProjectMiniNodeId={activeProjectMiniNodeId}
         onSelectProjectMiniNode={onSelectProjectMiniNode}
         scrollToBulletIndex={pendingExperienceScrollIndex}
