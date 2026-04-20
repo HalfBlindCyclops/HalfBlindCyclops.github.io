@@ -523,7 +523,11 @@ export function GlobeExperience() {
   const RESUME_PANEL_LIFT_PCT = 4;
   const resumePanelTopPercent = Math.max(10, streamStartYPercent - RESUME_PANEL_LIFT_PCT);
   const splitPanelBaseTop = `calc(${resumePanelTopPercent}% + 1rem)`;
-  const splitPanelTop = `max(${splitPanelBaseTop}, 11rem)`;
+  const useTallRightPanelLayout = isSplitView && (isProjectsSelected || isExperienceSelected);
+  // Projects/Experience should occupy the right column from near the top nav, not the connector line.
+  const splitPanelTop = useTallRightPanelLayout
+    ? "max(6.75rem, 9dvh)"
+    : `max(${splitPanelBaseTop}, 11rem)`;
   const splitPanelLeft = `calc(${CONNECTOR_LINE_END_PCT}% + 0.5rem)`;
   const splitPanelWidth = `min(52rem, calc(100% - ${CONNECTOR_LINE_END_PCT}% - 1.25rem))`;
   // Horizontal beam is h-[2px] with top at streamStartY — center is 1px lower (same coords as SVG viewBox %).
@@ -703,8 +707,8 @@ export function GlobeExperience() {
                 activeNodeId={activeNodeId}
                 activeProjectMiniNodeId={activeProjectMiniNodeId}
                 activeExperienceMiniNodeId={activeExperienceMiniNodeId}
-                showProjectMiniNodes={isProjectsSelected}
-                showExperienceMiniNodes={isExperienceSelected}
+                showProjectMiniNodes
+                showExperienceMiniNodes
                 reducedMotion={Boolean(prefersReducedMotion)}
                 accentColor={ACCENT_COLOR_HEX}
                 onSelect={onSelectNode}

@@ -11,10 +11,7 @@ type OrbitalSatellitesProps = {
   accentColor: string;
   reducedMotion: boolean;
   isMobile: boolean;
-  styleVariant?: SatelliteArrayStyle;
 };
-
-export type SatelliteArrayStyle = "walker" | "rosette" | "triad";
 
 type SatelliteSpec = {
   id: string;
@@ -68,194 +65,72 @@ type PlanePreset = {
   phaseJitterDeg: number;
 };
 
-const STYLE_PRESETS: Record<SatelliteArrayStyle, PlanePreset[]> = {
-  walker: [
-    {
-      count: 6,
-      radius: 2.04,
-      speed: 0.0162,
-      inclinationDeg: 42,
-      yawDeg: -114,
-      phaseOffset: 0.12,
-      layer: "core",
-      eccentricityBase: 0.032,
-      eccentricityJitter: 0.018,
-      radiusJitter: 0.03,
-      inclinationJitter: 2.2,
-      yawJitter: 1.8,
-      phaseJitterDeg: 4.5,
-    },
-    {
-      count: 6,
-      radius: 2.16,
-      speed: 0.0141,
-      inclinationDeg: 56,
-      yawDeg: -78,
-      phaseOffset: 0.45,
-      layer: "core",
-      eccentricityBase: 0.04,
-      eccentricityJitter: 0.02,
-      radiusJitter: 0.03,
-      inclinationJitter: 2.4,
-      yawJitter: 1.8,
-      phaseJitterDeg: 4.8,
-    },
-    {
-      count: 6,
-      radius: 2.27,
-      speed: 0.0124,
-      inclinationDeg: 65,
-      yawDeg: -44,
-      phaseOffset: 0.82,
-      layer: "outer",
-      eccentricityBase: 0.047,
-      eccentricityJitter: 0.021,
-      radiusJitter: 0.032,
-      inclinationJitter: 2.6,
-      yawJitter: 2.1,
-      phaseJitterDeg: 5.2,
-    },
-  ],
-  rosette: [
-    {
-      count: 4,
-      radius: 1.96,
-      speed: 0.0173,
-      inclinationDeg: 46,
-      yawDeg: -122,
-      phaseOffset: 0.11,
-      layer: "inner",
-      eccentricityBase: 0.018,
-      eccentricityJitter: 0.01,
-      radiusJitter: 0.028,
-      inclinationJitter: 2.1,
-      yawJitter: 2.2,
-      phaseJitterDeg: 4.2,
-    },
-    {
-      count: 4,
-      radius: 2.0,
-      speed: 0.0169,
-      inclinationDeg: 54,
-      yawDeg: -78,
-      phaseOffset: 0.53,
-      layer: "inner",
-      eccentricityBase: 0.022,
-      eccentricityJitter: 0.012,
-      radiusJitter: 0.028,
-      inclinationJitter: 2.1,
-      yawJitter: 2.2,
-      phaseJitterDeg: 4.4,
-    },
-    {
-      count: 4,
-      radius: 2.06,
-      speed: 0.0163,
-      inclinationDeg: 61,
-      yawDeg: -36,
-      phaseOffset: 0.94,
-      layer: "core",
-      eccentricityBase: 0.026,
-      eccentricityJitter: 0.013,
-      radiusJitter: 0.03,
-      inclinationJitter: 2.3,
-      yawJitter: 2.2,
-      phaseJitterDeg: 4.6,
-    },
-    {
-      count: 3,
-      radius: 2.3,
-      speed: 0.0122,
-      inclinationDeg: 36,
-      yawDeg: -100,
-      phaseOffset: 0.26,
-      layer: "outer",
-      eccentricityBase: 0.042,
-      eccentricityJitter: 0.018,
-      radiusJitter: 0.034,
-      inclinationJitter: 2.6,
-      yawJitter: 2.6,
-      phaseJitterDeg: 5,
-    },
-    {
-      count: 3,
-      radius: 2.34,
-      speed: 0.0119,
-      inclinationDeg: 43,
-      yawDeg: -58,
-      phaseOffset: 0.79,
-      layer: "outer",
-      eccentricityBase: 0.045,
-      eccentricityJitter: 0.02,
-      radiusJitter: 0.034,
-      inclinationJitter: 2.8,
-      yawJitter: 2.6,
-      phaseJitterDeg: 5.2,
-    },
-  ],
-  triad: [
-    {
-      count: 5,
-      radius: 2.07,
-      speed: 0.0149,
-      inclinationDeg: 44,
-      yawDeg: -108,
-      phaseOffset: 0.18,
-      layer: "core",
-      eccentricityBase: 0.036,
-      eccentricityJitter: 0.018,
-      radiusJitter: 0.03,
-      inclinationJitter: 2.4,
-      yawJitter: 2.1,
-      phaseJitterDeg: 4.8,
-    },
-    {
-      count: 5,
-      radius: 2.16,
-      speed: 0.0139,
-      inclinationDeg: 63,
-      yawDeg: -64,
-      phaseOffset: 0.66,
-      layer: "core",
-      eccentricityBase: 0.042,
-      eccentricityJitter: 0.019,
-      radiusJitter: 0.03,
-      inclinationJitter: 2.5,
-      yawJitter: 2.1,
-      phaseJitterDeg: 5,
-    },
-    {
-      count: 5,
-      radius: 2.24,
-      speed: 0.0128,
-      inclinationDeg: 52,
-      yawDeg: -20,
-      phaseOffset: 1.08,
-      layer: "outer",
-      eccentricityBase: 0.047,
-      eccentricityJitter: 0.02,
-      radiusJitter: 0.03,
-      inclinationJitter: 2.5,
-      yawJitter: 2.2,
-      phaseJitterDeg: 5.2,
-    },
-    {
-      count: 3,
-      radius: 2.37,
-      speed: 0.0108,
-      inclinationDeg: 72,
-      yawDeg: -88,
-      phaseOffset: 1.35,
-      layer: "drifter",
-      eccentricityBase: 0.13,
-      eccentricityJitter: 0.045,
-      radiusJitter: 0.036,
-      inclinationJitter: 2.8,
-      yawJitter: 2.8,
-      phaseJitterDeg: 5.8,
-    },
-  ],
-};
+const UNIQUE_CONSTELLATION_PRESET: PlanePreset[] = [
+  // Primary mid-inclination backbone plane.
+  {
+    count: 4,
+    radius: 2.08,
+    speed: 0.0154,
+    inclinationDeg: 46,
+    yawDeg: -112,
+    phaseOffset: 0.14,
+    layer: "core",
+    eccentricityBase: 0.022,
+    eccentricityJitter: 0.01,
+    radiusJitter: 0.022,
+    inclinationJitter: 1.9,
+    yawJitter: 1.7,
+    phaseJitterDeg: 3.6,
+  },
+  // Secondary high-inclination plane for strong angle contrast.
+  {
+    count: 4,
+    radius: 2.2,
+    speed: 0.0135,
+    inclinationDeg: 70,
+    yawDeg: -28,
+    phaseOffset: 0.72,
+    layer: "core",
+    eccentricityBase: 0.038,
+    eccentricityJitter: 0.014,
+    radiusJitter: 0.024,
+    inclinationJitter: 2.1,
+    yawJitter: 1.9,
+    phaseJitterDeg: 4.0,
+  },
+  // Low-inclination counter plane to prevent "all polar" feel.
+  {
+    count: 3,
+    radius: 2.26,
+    speed: 0.0128,
+    inclinationDeg: 26,
+    yawDeg: 58,
+    phaseOffset: 1.48,
+    layer: "outer",
+    eccentricityBase: 0.052,
+    eccentricityJitter: 0.018,
+    radiusJitter: 0.026,
+    inclinationJitter: 2.4,
+    yawJitter: 2.2,
+    phaseJitterDeg: 4.8,
+  },
+  // Sparse relay/drifter plane for longer arcs and variety.
+  {
+    count: 2,
+    radius: 2.42,
+    speed: 0.0112,
+    inclinationDeg: 84,
+    yawDeg: 112,
+    phaseOffset: 2.08,
+    layer: "drifter",
+    eccentricityBase: 0.088,
+    eccentricityJitter: 0.03,
+    radiusJitter: 0.03,
+    inclinationJitter: 2.7,
+    yawJitter: 2.6,
+    phaseJitterDeg: 5.3,
+  },
+];
 
 function seedSpreadAngles(prefix: string, count: number, minGapRad: number): number[] {
   if (count <= 1) return [0];
@@ -285,21 +160,35 @@ function seedSpreadAngles(prefix: string, count: number, minGapRad: number): num
   return result;
 }
 
-function buildSpecsForStyle(styleVariant: SatelliteArrayStyle): SatelliteSpec[] {
-  const presets = STYLE_PRESETS[styleVariant];
+function buildUniqueSatelliteSpecs(): SatelliteSpec[] {
+  const presets = UNIQUE_CONSTELLATION_PRESET;
+  const planeCount = presets.length;
+  const planeYawSpanDeg = 180;
   const specs: SatelliteSpec[] = [];
   presets.forEach((plane, p) => {
-    const phaseAngles = seedSpreadAngles(`${styleVariant}-plane-${p + 1}`, plane.count, 0.42);
+    const phaseAngles = seedSpreadAngles(`constellation-plane-${p + 1}`, plane.count, 0.42);
     for (let s = 0; s < plane.count; s += 1) {
-      const id = `${styleVariant}-p${p + 1}-s${s + 1}`;
+      const id = `constellation-p${p + 1}-s${s + 1}`;
+      // Keep constellation structure, but offset each satellite's plane slightly
+      // so they do not read like perfectly stacked coplanar rings.
+      const slotBlend = plane.count <= 1 ? 0 : s / (plane.count - 1) - 0.5;
+      const microPlaneInclination = slotBlend * 2.6;
+      const microPlaneYaw = slotBlend * 3.2;
+      const planeBlend = planeCount <= 1 ? 0 : p / (planeCount - 1) - 0.5;
+      const majorPlaneYaw = planeBlend * planeYawSpanDeg;
+      const majorPlaneInclination = Math.sin((p + 1) * 1.37) * 4.6;
       specs.push({
         id,
         radius: plane.radius + jitter(`${id}-r`, plane.radiusJitter),
         speed: plane.speed,
         phase:
           phaseAngles[s] + plane.phaseOffset + ((jitter(`${id}-phase-fine`, 1) * Math.PI) / 180) * 0.5,
-        inclinationDeg: plane.inclinationDeg + jitter(`${id}-inc`, plane.inclinationJitter),
-        yawDeg: plane.yawDeg + jitter(`${id}-yaw`, plane.yawJitter),
+        inclinationDeg:
+          plane.inclinationDeg +
+          majorPlaneInclination +
+          microPlaneInclination +
+          jitter(`${id}-inc`, plane.inclinationJitter),
+        yawDeg: plane.yawDeg + majorPlaneYaw + microPlaneYaw + jitter(`${id}-yaw`, plane.yawJitter),
         planeIndex: p,
         slotIndex: s,
         layer: plane.layer,
@@ -308,17 +197,22 @@ function buildSpecsForStyle(styleVariant: SatelliteArrayStyle): SatelliteSpec[] 
       });
     }
   });
-  return specs;
-}
 
-function buildSatelliteSpecs(styleVariant: SatelliteArrayStyle): SatelliteSpec[] {
-  return buildSpecsForStyle(styleVariant);
+  return specs;
 }
 
 function buildSatelliteLinkCandidates(specs: SatelliteSpec[]): SatelliteLinkCandidate[] {
   const referencePositions = specs.map((spec) => orbitPoint(spec, spec.phase, new Vector3()));
   const seen = new Set<string>();
   const candidates: SatelliteLinkCandidate[] = [];
+  const satellitesByPlane = new Map<number, Array<{ index: number; spec: SatelliteSpec }>>();
+  specs.forEach((spec, index) => {
+    if (!satellitesByPlane.has(spec.planeIndex)) satellitesByPlane.set(spec.planeIndex, []);
+    satellitesByPlane.get(spec.planeIndex)?.push({ index, spec });
+  });
+  satellitesByPlane.forEach((list) => list.sort((a, b) => a.spec.slotIndex - b.spec.slotIndex));
+  const orderedPlanes = Array.from(satellitesByPlane.keys()).sort((a, b) => a - b);
+
   const pushEdge = (aIndex: number, bIndex: number, kind: SatelliteLinkCandidate["kind"], score: number) => {
     if (aIndex === bIndex) return;
     const lo = Math.min(aIndex, bIndex);
@@ -337,14 +231,36 @@ function buildSatelliteLinkCandidates(specs: SatelliteSpec[]): SatelliteLinkCand
   };
 
   specs.forEach((spec, i) => {
-    const samePlane = specs
-      .map((other, j) => ({ j, other }))
-      .filter(({ j, other }) => j !== i && other.planeIndex === spec.planeIndex)
-      .sort((a, b) => a.other.slotIndex - b.other.slotIndex);
+    const samePlane = satellitesByPlane.get(spec.planeIndex) ?? [];
     if (samePlane.length > 0) {
-      const next = samePlane[spec.slotIndex % samePlane.length];
-      pushEdge(i, next.j, "backbone", 2.2);
+      const localIdx = samePlane.findIndex((entry) => entry.index === i);
+      const next = samePlane[(localIdx + 1 + samePlane.length) % samePlane.length];
+      const prev = samePlane[(localIdx - 1 + samePlane.length) % samePlane.length];
+      pushEdge(i, next.index, "backbone", 2.45);
+      pushEdge(i, prev.index, "backbone", 2.25);
     }
+
+    const planeOrderIdx = orderedPlanes.findIndex((planeIdx) => planeIdx === spec.planeIndex);
+    const adjacentPlanes = [
+      orderedPlanes[(planeOrderIdx + 1) % orderedPlanes.length],
+      orderedPlanes[(planeOrderIdx - 1 + orderedPlanes.length) % orderedPlanes.length],
+    ];
+    adjacentPlanes.forEach((planeIdx, step) => {
+      const planeSats = satellitesByPlane.get(planeIdx);
+      if (!planeSats || planeSats.length === 0) return;
+      const aligned =
+        planeSats[
+          Math.floor((spec.slotIndex / Math.max(1, samePlane.length)) * planeSats.length) %
+            planeSats.length
+        ];
+      const diagonal =
+        planeSats[
+          (aligned.spec.slotIndex + (step === 0 ? 1 : -1) + planeSats.length) % planeSats.length
+        ];
+      pushEdge(i, aligned.index, "backbone", 2.35);
+      pushEdge(i, diagonal.index, "access", 1.65);
+    });
+
     const neighbors = specs
       .map((other, j) => ({ j, other }))
       .filter(({ j }) => j !== i)
@@ -355,12 +271,14 @@ function buildSatelliteLinkCandidates(specs: SatelliteSpec[]): SatelliteLinkCand
       })
       .sort((a, b) => a.distance - b.distance);
     neighbors
-      .slice(0, 4)
-      .forEach(({ j, crossPlane }) => pushEdge(i, j, crossPlane ? "backbone" : "access", 1.4 + crossPlane * 0.7));
+      .slice(0, 3)
+      .forEach(({ j, crossPlane }) =>
+        pushEdge(i, j, crossPlane ? "access" : "backbone", 1.3 + crossPlane * 0.65),
+      );
     neighbors
       .filter(({ crossPlane }) => crossPlane === 1)
-      .slice(0, 2)
-      .forEach(({ j }) => pushEdge(i, j, "backbone", 2.1));
+      .slice(0, 1)
+      .forEach(({ j }) => pushEdge(i, j, "access", 1.5));
   });
 
   return candidates;
@@ -418,19 +336,17 @@ const ORBIT_SEGMENT_COUNT = 96;
 // Higher values shorten the bright "recently traveled" trail.
 const ORBIT_TRAIL_DECAY = 2.7;
 // Active satellite orbit brightness floor + additive trail peak.
-const ORBIT_ACTIVE_BASE_OPACITY = 0.14;
-const ORBIT_ACTIVE_TRAIL_GAIN = 0.23;
+const ORBIT_ACTIVE_BASE_OPACITY = 0.28;
+const ORBIT_ACTIVE_TRAIL_GAIN = 0.34;
 // Inactive satellite orbit brightness floor + additive trail peak.
-const ORBIT_INACTIVE_BASE_OPACITY = 0.022;
-const ORBIT_INACTIVE_TRAIL_GAIN = 0.072;
+const ORBIT_INACTIVE_BASE_OPACITY = 0.11;
+const ORBIT_INACTIVE_TRAIL_GAIN = 0.16;
 const NETWORK_SOLVE_INTERVAL_SEC = 0.32;
 const NETWORK_SOLVE_INTERVAL_LOW_QUALITY_SEC = 0.48;
 const EDGE_PROMOTE_SCORE = 0.7;
 const EDGE_DEMOTE_SCORE = 0.47;
 const EDGE_TTL_SEC = 1.35;
 const BACKBONE_DEGREE_LIMIT = 4;
-const ACCESS_DEGREE_LIMIT = 2;
-const ACCESS_EDGES_PER_GATEWAY = 2;
 
 function clamp01(t: number) {
   return Math.max(0, Math.min(1, t));
@@ -761,6 +677,7 @@ function SignalLine({
   requireClearPath = false,
   requireFullLineVisible = false,
   orbitStyle = false,
+  orbitLineWidth = 0.8,
   signalOpacity = 0.72,
   signalLineWidth = 2.35,
   rfOpacity = 0.84,
@@ -792,6 +709,7 @@ function SignalLine({
   requireClearPath?: boolean;
   requireFullLineVisible?: boolean;
   orbitStyle?: boolean;
+  orbitLineWidth?: number;
   signalOpacity?: number;
   signalLineWidth?: number;
   rfOpacity?: number;
@@ -1071,7 +989,7 @@ function SignalLine({
         color={signalColor}
         transparent
         opacity={orbitStyle ? 0.22 : solid ? 1 : signalOpacity}
-        lineWidth={orbitStyle ? 0.8 : solid ? 2.45 : signalLineWidth}
+        lineWidth={orbitStyle ? orbitLineWidth : solid ? 2.45 : signalLineWidth}
         depthTest={depthOcclude}
         depthWrite={false}
       />
@@ -1114,9 +1032,8 @@ export function OrbitalSatellites({
   accentColor,
   reducedMotion,
   isMobile,
-  styleVariant = "walker",
 }: OrbitalSatellitesProps) {
-  const satelliteSpecs = useMemo(() => buildSatelliteSpecs(styleVariant), [styleVariant]);
+  const satelliteSpecs = useMemo(() => buildUniqueSatelliteSpecs(), []);
   const satelliteLinks = useMemo(() => buildSatelliteLinkCandidates(satelliteSpecs), [satelliteSpecs]);
   const linksById = useMemo(
     () => new Map(satelliteLinks.map((link) => [link.id, link] as const)),
@@ -1188,7 +1105,7 @@ export function OrbitalSatellites({
     [orbitTrackPoints],
   );
 
-  useFrame(({ clock }, delta) => {
+  useFrame(({ clock, camera }, delta) => {
     const t = clock.elapsedTime;
     const tau = Math.PI * 2;
     satelliteSpecs.forEach((spec, i) => {
@@ -1199,6 +1116,8 @@ export function OrbitalSatellites({
       const satMesh = satMeshRefs.current[i];
       if (satMesh) {
         satMesh.position.copy(satPositionRefs[i].current);
+        // Keep satellite markers as screen-facing upright triangles.
+        satMesh.quaternion.copy(camera.quaternion);
         const isActiveSat = activeSatIndicesRef.current.has(i);
         const pulseAmp = reducedMotion ? 0.012 : isActiveSat ? 0.085 : 0.045;
         const pulse = 1 + Math.sin(t * 2.9 + spec.phase) * pulseAmp;
@@ -1229,7 +1148,6 @@ export function OrbitalSatellites({
     if (networkSolveElapsedRef.current >= solveEvery) {
       networkSolveElapsedRef.current = 0;
       const satDegreesBackbone = Array.from({ length: satelliteSpecs.length }, () => 0);
-      const satDegreesAccess = Array.from({ length: satelliteSpecs.length }, () => 0);
       const sortedLinks = satelliteLinks
         .map((link) => {
           const a = satPositionRefs[link.aIndex].current;
@@ -1334,8 +1252,8 @@ export function OrbitalSatellites({
         edgeStickyUntilRef.current.set(bridge.id, t + EDGE_TTL_SEC);
       }
 
-      const activeSatPairKeys = new Set<string>(repairBackbone);
-      const adjacency = buildSatAdjacency(activeSatPairKeys, linksById, satelliteSpecs.length);
+      const activeSatPairKeys = new Set<string>();
+      const adjacency = buildSatAdjacency(repairBackbone, linksById, satelliteSpecs.length);
       const gatewayArray = Array.from(gatewaySatIndices);
       for (let i = 0; i < gatewayArray.length; i += 1) {
         for (let j = i + 1; j < gatewayArray.length; j += 1) {
@@ -1350,26 +1268,16 @@ export function OrbitalSatellites({
         }
       }
 
-      const accessCandidates = sortedLinks.filter(({ link, clear }) => clear && link.kind === "access");
-      gatewayArray.forEach((gatewaySat) => {
-        let added = 0;
-        accessCandidates.forEach(({ link }) => {
-          if (added >= ACCESS_EDGES_PER_GATEWAY) return;
-          const connectedSat = link.aIndex === gatewaySat ? link.bIndex : link.bIndex === gatewaySat ? link.aIndex : -1;
-          if (connectedSat < 0) return;
-          if (
-            satDegreesAccess[link.aIndex] >= ACCESS_DEGREE_LIMIT ||
-            satDegreesAccess[link.bIndex] >= ACCESS_DEGREE_LIMIT
-          ) {
-            return;
-          }
-          activeSatPairKeys.add(link.id);
-          satDegreesAccess[link.aIndex] += 1;
-          satDegreesAccess[link.bIndex] += 1;
-          edgeStickyUntilRef.current.set(link.id, t + EDGE_TTL_SEC * 0.8);
-          added += 1;
-        });
-      });
+      if (gatewayArray.length === 2 && activeSatPairKeys.size === 0) {
+        const fallback = shortestSatPathEdgeIds(
+          gatewayArray[0],
+          gatewayArray[1],
+          adjacency,
+          linksById,
+          satPositionRefs,
+        );
+        fallback.forEach((edgeId) => activeSatPairKeys.add(edgeId));
+      }
 
       const activeSatIndices = new Set<number>();
       activeSatPairKeys.forEach((edgeId) => {
@@ -1477,7 +1385,7 @@ export function OrbitalSatellites({
           }}
           raycast={() => null}
         >
-          <sphereGeometry args={[0.0105, 14, 14]} />
+          <coneGeometry args={[0.0135, 0.028, 3]} />
           <meshBasicMaterial
             color={signalColor}
             toneMapped={false}
@@ -1516,6 +1424,7 @@ export function OrbitalSatellites({
             straight
             depthOcclude
             requireClearPath
+          requireFullLineVisible
             microwaveStyle
             signalOpacity={0.34}
             signalLineWidth={0.95}
@@ -1524,8 +1433,8 @@ export function OrbitalSatellites({
             linkKey={`${spec.id}-${anchorKey}-node-link`}
             activeLinkKeysRef={activeNodeLinkKeysRef}
             activeNoiseLinkKeysRef={activePathNoiseLinkKeysRef}
-            idleOpacity={0.07}
-            idleLineWidth={0.14}
+            idleOpacity={0}
+            idleLineWidth={0}
             lowQuality={lowQualityTier}
           />
         )),
@@ -1542,10 +1451,12 @@ export function OrbitalSatellites({
           alwaysVisible
           straight
           requireClearPath
+          requireFullLineVisible
           orbitStyle
           microwaveStyle
-          signalOpacity={0.34}
-          rfOpacity={0.58}
+          orbitLineWidth={1.35}
+          signalOpacity={0.58}
+          rfOpacity={0.85}
           linkKey={pair.id}
           activeLinkKeysRef={activeSatPairKeysRef}
           activeNoiseLinkKeysRef={activePathNoiseLinkKeysRef}
