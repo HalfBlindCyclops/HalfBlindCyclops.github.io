@@ -27,7 +27,7 @@ import {
   ResumeConnector,
 } from "@/components/ui/ResumeConnector";
 import { experienceMiniNodes } from "@/data/experienceMiniNodes";
-import { projectMiniNodes } from "@/data/projectMiniNodes";
+import { getProjectMiniNodeProfile, projectMiniNodes } from "@/data/projectMiniNodes";
 import { INITIAL_GLOBE_FOCUS, resumeNodes, type ResumeNode } from "@/data/resumeNodes";
 import { ACCENT_COLOR_HEX, colorToRgba } from "@/lib/colorFormat";
 import {
@@ -58,6 +58,14 @@ type MiniDetailInfo = {
   groupLabel: string;
   summary: string;
   details: string;
+  chips?: string[];
+  highlights?: string[];
+  impact?: string;
+  status?: string;
+  links?: Array<{
+    label: string;
+    href: string;
+  }>;
 };
 
 const CONNECTOR_ANCHOR_HIDDEN_KEY = "__hidden__";
@@ -325,6 +333,62 @@ function MiniNodeDetailPanel({
           <p className="text-base leading-7 text-slate-200 md:text-[1.05rem] md:leading-8">
             {detail.details}
           </p>
+          {detail.chips && detail.chips.length > 0 ? (
+            <div className="flex flex-wrap gap-2 pt-1">
+              {detail.chips.map((chip) => (
+                <span
+                  key={chip}
+                  className="rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-medium text-slate-100"
+                >
+                  {chip}
+                </span>
+              ))}
+            </div>
+          ) : null}
+          {detail.highlights && detail.highlights.length > 0 ? (
+            <div className="space-y-2 rounded-xl border border-white/15 bg-slate-900/30 p-3.5">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-300">
+                Highlights
+              </p>
+              <ul className="space-y-1.5 text-sm leading-6 text-slate-200">
+                {detail.highlights.map((item) => (
+                  <li key={item} className="flex gap-2">
+                    <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-cyan-300/80" />
+                    <span>{item}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+          {detail.impact || detail.status ? (
+            <div className="grid gap-2 rounded-xl border border-white/15 bg-slate-900/30 p-3.5 text-sm text-slate-200">
+              {detail.status ? (
+                <p>
+                  <span className="font-semibold text-white">Status:</span> {detail.status}
+                </p>
+              ) : null}
+              {detail.impact ? (
+                <p>
+                  <span className="font-semibold text-white">Impact:</span> {detail.impact}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+          {detail.links && detail.links.length > 0 ? (
+            <div className="flex flex-wrap gap-2">
+              {detail.links.map((link) => (
+                <a
+                  key={`${detail.title}-${link.label}`}
+                  href={link.href}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center rounded-full border border-cyan-300/40 bg-cyan-400/10 px-3 py-1.5 text-xs font-semibold text-cyan-100 transition hover:border-cyan-200/70 hover:bg-cyan-300/20"
+                >
+                  {link.label}
+                </a>
+              ))}
+            </div>
+          ) : null}
         </div>
       </motion.aside>
     </AnimatePresence>
@@ -450,16 +514,34 @@ export function GlobeExperience() {
       : null;
   const activeMiniDetail: MiniDetailInfo | null = useMemo(() => {
     if (isProjectsSelected && activeProjectMiniNode && projectsNode?.projectSubsections) {
+      const profile = getProjectMiniNodeProfile(activeProjectMiniNode.id);
       const bullet =
         projectsNode.projectSubsections[activeProjectMiniNode.subsection][
           activeProjectMiniNode.subsectionIndex
         ] ?? "";
       const { summary, details } = miniBulletParts(bullet);
+      const timeframe = profile?.timeframe?.trim() || "Timeline to be added";
+      const role = profile?.role?.trim() || "Role details coming soon";
+      const stack = profile?.stack?.filter(Boolean) ?? [];
+      const highlights = (profile?.highlights?.filter(Boolean) ?? []).slice(0, 4);
+      const impact = profile?.impact?.trim() || "Impact summary will be added soon.";
+      const status = profile?.status?.trim() || "Status coming soon";
       return {
         title: activeProjectMiniNode.title,
         groupLabel: "Project detail",
         summary,
-        details,
+        details: details === summary ? "Additional implementation details coming soon." : details,
+        chips: [timeframe, role, ...stack.slice(0, 4)],
+        highlights:
+          highlights.length > 0
+            ? highlights
+            : [
+                "Detailed technical highlights are being documented.",
+                "Key architecture and implementation notes will be added.",
+              ],
+        impact,
+        status,
+        links: profile?.links?.length ? profile.links : [{ label: "Reference link", href: "#" }],
       };
     }
     if (isExperienceSelected && activeExperienceMiniNode && experienceNode) {
@@ -515,6 +597,33 @@ export function GlobeExperience() {
     selectedNode !== null &&
     sceneMode === "focused" &&
     connectorPathsActive;
+  const connectorTargetLatLon = useMemo(() => {
+    if (isProjectsSelected && activeProjectMiniNode) {
+      return {
+        latitude: activeProjectMiniNode.latitude,
+        longitude: activeProjectMiniNode.longitude,
+      };
+    }
+    if (isExperienceSelected && activeExperienceMiniNode) {
+      return {
+        latitude: activeExperienceMiniNode.latitude,
+        longitude: activeExperienceMiniNode.longitude,
+      };
+    }
+    if (selectedNode) {
+      return {
+        latitude: selectedNode.latitude,
+        longitude: selectedNode.longitude,
+      };
+    }
+    return { latitude: null, longitude: null };
+  }, [
+    activeExperienceMiniNode,
+    activeProjectMiniNode,
+    isExperienceSelected,
+    isProjectsSelected,
+    selectedNode,
+  ]);
   /** Lower % = higher on screen. Same pin-based beam + same panel lift offset for every resume tab vs the beam. */
   const streamStartYPercent = selectedNode
     ? Math.max(12, Math.min(32, 26 - (selectedNode.latitude / 90) * 18))
@@ -740,8 +849,8 @@ export function GlobeExperience() {
               }}
             />
             <ConnectorAnchorTracker
-              latitude={selectedNode?.latitude ?? null}
-              longitude={selectedNode?.longitude ?? null}
+              latitude={connectorTargetLatLon.latitude}
+              longitude={connectorTargetLatLon.longitude}
               onChange={setConnectorAnchorStore}
             />
             <CursorLatLonTracker onChange={setCursorLatLonStore} />

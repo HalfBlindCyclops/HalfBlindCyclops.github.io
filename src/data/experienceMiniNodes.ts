@@ -8,7 +8,7 @@ export type ExperienceMiniNode = {
 
 /**
  * Major experience entries only (excludes earlier/short roles).
- * Mini nodes cluster around the primary Experience marker (`61, -103`).
+ * Mini nodes cluster around the primary Experience marker (`61, -128`).
  */
 export const experienceMiniNodes: ExperienceMiniNode[] = [
   {
@@ -16,28 +16,28 @@ export const experienceMiniNodes: ExperienceMiniNode[] = [
     title: "Inclusive Computing",
     bulletIndex: 0,
     latitude: 72.4,
-    longitude: -128.9,
+    longitude: -153.9,
   },
   {
     id: "exp-startup-consulting",
     title: "Startup Consulting",
     bulletIndex: 1,
     latitude: 66.1,
-    longitude: -121.4,
+    longitude: -146.4,
   },
   {
     id: "exp-boston-globe-media",
     title: "Boston Globe Media",
     bulletIndex: 2,
     latitude: 61.7,
-    longitude: -133.2,
+    longitude: -158.2,
   },
   {
     id: "exp-vita-needle",
     title: "Vita Needle",
     bulletIndex: 3,
     latitude: 56.8,
-    longitude: -124.6,
+    longitude: -149.6,
   },
 ];
 

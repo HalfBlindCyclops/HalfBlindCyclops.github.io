@@ -54,7 +54,7 @@ export const resumeNodes: ResumeNode[] = [
     subtitle: "Research, media, consulting, and earlier roles",
     /** Globe pin: Greenland (visual spread on the map; roles are mostly Boston-based). */
     latitude: 61,
-    longitude: -103,
+    longitude: -128,
     color: "#38bdf8",
     markerStyle: "uplinkPad",
     bullets: [
@@ -71,9 +71,9 @@ export const resumeNodes: ResumeNode[] = [
     id: "projects",
     title: "Projects",
     subtitle: "",
-    /** Globe pin: South-Central (Austin, TX) — visual spread on the map. */
-    latitude: 34,
-    longitude: -140,
+    /** Globe pin: Southeast Asia (Singapore region) — visual spread on the map. */
+    latitude: 1.3521,
+    longitude: 103.8198,
     color: "#2dd4bf",
     markerStyle: "uplinkPad",
     bullets: [],
