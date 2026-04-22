@@ -1182,10 +1182,10 @@ export function OrbitalSatellites({
         const previousGateway = lastNodeGatewayRef.current.get(anchorKey);
         const candidates = satelliteSpecs
           .map((spec, satIndex) => {
-            const satPos = satPositionRefs[satIndex].current;
+        const satPos = satPositionRefs[satIndex].current;
             const clear = segmentClearsPlanet(targetRef.current, satPos, PLANET_BLOCK_RADIUS);
-            const distance = targetRef.current.distanceTo(satPos);
-            const altitudeBias = Math.max(0, satPos.length() - 1);
+        const distance = targetRef.current.distanceTo(satPos);
+        const altitudeBias = Math.max(0, satPos.length() - 1);
             const stickiness = previousGateway === satIndex ? 0.12 : 0;
             const base = 1 / Math.max(0.001, distance) + altitudeBias * 0.06 + stickiness;
             const scoreClear = (clear ? 1 : 0) * base;
@@ -1233,9 +1233,10 @@ export function OrbitalSatellites({
       // Guarantee assignment for every anchor, but prefer the minimal selected gateway set.
       anchorCandidates.forEach(({ anchorKey, candidates }) => {
         const chosenFromSelected = candidates
+          .filter((candidate) => candidate.clear)
           .filter((candidate) => gatewaySatIndices.has(candidate.satIndex))
           .sort((a, b) => (b.clear === a.clear ? b.scoreAny - a.scoreAny : Number(b.clear) - Number(a.clear)))[0];
-        const fallback = candidates[0];
+        const fallback = candidates.find((candidate) => candidate.clear);
         const chosen = chosenFromSelected ?? fallback;
         if (!chosen) return;
         gatewaySatIndices.add(chosen.satIndex);
@@ -1339,17 +1340,17 @@ export function OrbitalSatellites({
       activeSatPairKeysRef.current = activeSatPairKeys;
 
       const adjacencyByNode = new Map<string, Set<string>>();
-      const edgeEndpoints = new Map<string, [string, string]>();
-      const touch = (id: string) => {
+    const edgeEndpoints = new Map<string, [string, string]>();
+    const touch = (id: string) => {
         if (!adjacencyByNode.has(id)) adjacencyByNode.set(id, new Set());
-      };
+    };
       const linkNodes = (a: string, b: string, edgeKey: string) => {
-        touch(a);
-        touch(b);
+      touch(a);
+      touch(b);
         adjacencyByNode.get(a)?.add(b);
         adjacencyByNode.get(b)?.add(a);
-        edgeEndpoints.set(edgeKey, [a, b]);
-      };
+      edgeEndpoints.set(edgeKey, [a, b]);
+    };
       anchorAssignments.forEach(({ key, satIndex, anchorKey }) => {
         linkNodes(`g:${anchorKey}`, `s:${satIndex}`, key);
       });
@@ -1357,33 +1358,33 @@ export function OrbitalSatellites({
         const edge = linksById.get(edgeKey);
         if (!edge) return;
         linkNodes(`s:${edge.aIndex}`, `s:${edge.bIndex}`, edgeKey);
-      });
-      const noisyEdgeKeys = new Set<string>();
+    });
+    const noisyEdgeKeys = new Set<string>();
       const visited = new Set<string>();
       adjacencyByNode.forEach((_, startNode) => {
         if (visited.has(startNode)) return;
-        const stack = [startNode];
-        const componentNodes: string[] = [];
-        while (stack.length > 0) {
-          const node = stack.pop();
+      const stack = [startNode];
+      const componentNodes: string[] = [];
+      while (stack.length > 0) {
+        const node = stack.pop();
           if (!node || visited.has(node)) continue;
           visited.add(node);
-          componentNodes.push(node);
+        componentNodes.push(node);
           adjacencyByNode.get(node)?.forEach((nextNode) => {
             if (!visited.has(nextNode)) stack.push(nextNode);
-          });
-        }
-        const groundCount = componentNodes.reduce(
-          (sum, nodeId) => sum + (nodeId.startsWith("g:") ? 1 : 0),
-          0,
-        );
-        if (groundCount < 2) return;
-        const nodeSet = new Set(componentNodes);
-        edgeEndpoints.forEach(([a, b], edgeKey) => {
-          if (nodeSet.has(a) && nodeSet.has(b)) noisyEdgeKeys.add(edgeKey);
         });
+      }
+      const groundCount = componentNodes.reduce(
+        (sum, nodeId) => sum + (nodeId.startsWith("g:") ? 1 : 0),
+        0,
+      );
+      if (groundCount < 2) return;
+        const nodeSet = new Set(componentNodes);
+      edgeEndpoints.forEach(([a, b], edgeKey) => {
+          if (nodeSet.has(a) && nodeSet.has(b)) noisyEdgeKeys.add(edgeKey);
       });
-      activePathNoiseLinkKeysRef.current = noisyEdgeKeys;
+    });
+    activePathNoiseLinkKeysRef.current = noisyEdgeKeys;
     }
 
     const segmentAngle = tau / ORBIT_SEGMENT_COUNT;
