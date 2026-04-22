@@ -1178,7 +1178,7 @@ export function OrbitalSatellites({
 
       const anchorAssignments: Array<{ key: string; satIndex: number; anchorKey: string }> = [];
       const gatewaySatIndices = new Set<number>();
-      nodeAnchorEntries.forEach(([anchorKey, targetRef]) => {
+      const anchorCandidates = nodeAnchorEntries.map(([anchorKey, targetRef]) => {
         const previousGateway = lastNodeGatewayRef.current.get(anchorKey);
         const candidates = satelliteSpecs
           .map((spec, satIndex) => {
@@ -1187,17 +1187,62 @@ export function OrbitalSatellites({
             const distance = targetRef.current.distanceTo(satPos);
             const altitudeBias = Math.max(0, satPos.length() - 1);
             const stickiness = previousGateway === satIndex ? 0.12 : 0;
-            const score = (clear ? 1 : 0.45) * (1 / Math.max(0.001, distance)) + altitudeBias * 0.06 + stickiness;
-            return { satIndex, score };
+            const base = 1 / Math.max(0.001, distance) + altitudeBias * 0.06 + stickiness;
+            const scoreClear = (clear ? 1 : 0) * base;
+            const scoreAny = (clear ? 1 : 0.45) * base;
+            return { satIndex, clear, scoreClear, scoreAny };
           })
-          .sort((a, b) => b.score - a.score);
-        if (candidates.length === 0) return;
-        const selected = candidates[0];
-        gatewaySatIndices.add(selected.satIndex);
-        lastNodeGatewayRef.current.set(anchorKey, selected.satIndex);
+          .sort((a, b) => b.scoreAny - a.scoreAny);
+        return { anchorKey, candidates };
+      });
+      const anchorToIdx = new Map(anchorCandidates.map((entry, idx) => [entry.anchorKey, idx] as const));
+      const uncovered = new Set(anchorCandidates.map((entry) => entry.anchorKey));
+      while (uncovered.size > 0) {
+        let bestSat = -1;
+        let bestCoverage = -1;
+        let bestScore = Number.NEGATIVE_INFINITY;
+        for (let satIndex = 0; satIndex < satelliteSpecs.length; satIndex += 1) {
+          let coverage = 0;
+          let aggregate = 0;
+          uncovered.forEach((anchorKey) => {
+            const idx = anchorToIdx.get(anchorKey);
+            if (idx === undefined) return;
+            const candidate = anchorCandidates[idx].candidates[satIndex];
+            if (!candidate || !candidate.clear) return;
+            coverage += 1;
+            aggregate += candidate.scoreClear;
+          });
+          if (coverage === 0) continue;
+          if (coverage > bestCoverage || (coverage === bestCoverage && aggregate > bestScore)) {
+            bestSat = satIndex;
+            bestCoverage = coverage;
+            bestScore = aggregate;
+          }
+        }
+        if (bestSat < 0) break;
+        gatewaySatIndices.add(bestSat);
+        const coveredNow: string[] = [];
+        uncovered.forEach((anchorKey) => {
+          const idx = anchorToIdx.get(anchorKey);
+          if (idx === undefined) return;
+          const candidate = anchorCandidates[idx].candidates[bestSat];
+          if (candidate?.clear) coveredNow.push(anchorKey);
+        });
+        coveredNow.forEach((anchorKey) => uncovered.delete(anchorKey));
+      }
+      // Guarantee assignment for every anchor, but prefer the minimal selected gateway set.
+      anchorCandidates.forEach(({ anchorKey, candidates }) => {
+        const chosenFromSelected = candidates
+          .filter((candidate) => gatewaySatIndices.has(candidate.satIndex))
+          .sort((a, b) => (b.clear === a.clear ? b.scoreAny - a.scoreAny : Number(b.clear) - Number(a.clear)))[0];
+        const fallback = candidates[0];
+        const chosen = chosenFromSelected ?? fallback;
+        if (!chosen) return;
+        gatewaySatIndices.add(chosen.satIndex);
+        lastNodeGatewayRef.current.set(anchorKey, chosen.satIndex);
         anchorAssignments.push({
-          key: `${satelliteSpecs[selected.satIndex].id}-${anchorKey}-node-link`,
-          satIndex: selected.satIndex,
+          key: `${satelliteSpecs[chosen.satIndex].id}-${anchorKey}-node-link`,
+          satIndex: chosen.satIndex,
           anchorKey,
         });
       });
@@ -1421,10 +1466,9 @@ export function OrbitalSatellites({
             phase={spec.phase + anchorIndex * 0.17}
             signalColor={signalColor}
             reducedMotion={reducedMotion}
+            alwaysVisible
             straight
             depthOcclude
-            requireClearPath
-          requireFullLineVisible
             microwaveStyle
             signalOpacity={0.34}
             signalLineWidth={0.95}
@@ -1450,8 +1494,7 @@ export function OrbitalSatellites({
           reducedMotion={reducedMotion}
           alwaysVisible
           straight
-          requireClearPath
-          requireFullLineVisible
+          depthOcclude
           orbitStyle
           microwaveStyle
           orbitLineWidth={1.35}
