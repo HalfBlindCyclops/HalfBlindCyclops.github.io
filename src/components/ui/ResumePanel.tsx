@@ -16,6 +16,12 @@ import {
 } from "@/data/projectMiniNodes";
 import type { ResumeNode, ResumeProjectSubsections } from "@/data/resumeNodes";
 import { ACCENT_COLOR_HEX, colorToRgba } from "@/lib/colorFormat";
+/** Viewport-relative top-left of the resume panel (for connector alignment). */
+export type ResumePanelAnchor = {
+  leftPct: number;
+  topPct: number;
+};
+
 export type ResumeProjectDetail = {
   title: string;
   summary: string;
@@ -384,8 +390,8 @@ function ProjectsMasterDetail({
           {PROJECT_GROUPS.map((group) => (
             <section key={group.key}>
               <h3 className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">
-                {group.title}
-              </h3>
+            {group.title}
+          </h3>
               <ul className="mt-2 space-y-2">
                 {group.nodes.map((node) => (
                   <li key={node.id}>
@@ -398,9 +404,9 @@ function ProjectsMasterDetail({
                     ) : null}
                   </li>
                 ))}
-              </ul>
-            </section>
-          ))}
+          </ul>
+        </section>
+      ))}
         </div>
       </nav>
       <div className="min-h-0 min-w-0 flex-1 md:overflow-y-auto md:overscroll-y-contain">
@@ -453,6 +459,7 @@ type ResumePanelProps = {
   projectNavPosition?: { current: number; total: number };
   scrollToBulletIndex?: number | null;
   onDidScrollToBullet?: () => void;
+  onPanelAnchorChange?: (anchor: ResumePanelAnchor | null) => void;
 };
 
 export function ResumePanel({
@@ -475,10 +482,32 @@ export function ResumePanel({
   projectNavPosition,
   scrollToBulletIndex = null,
   onDidScrollToBullet,
+  onPanelAnchorChange,
 }: ResumePanelProps) {
+  const asideRef = useRef<HTMLElement>(null);
   const scrollBodyRef = useRef<HTMLDivElement>(null);
   const [hasVerticalScroll, setHasVerticalScroll] = useState(false);
   const [showProjectsScrollCue, setShowProjectsScrollCue] = useState(false);
+
+  const reportPanelAnchor = useCallback(() => {
+    if (!onPanelAnchorChange || !isSplitView) return;
+    const el = asideRef.current;
+    if (!el) {
+      onPanelAnchorChange(null);
+      return;
+    }
+    const rect = el.getBoundingClientRect();
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    if (vw <= 0 || vh <= 0 || rect.width <= 0) {
+      onPanelAnchorChange(null);
+      return;
+    }
+    onPanelAnchorChange({
+      leftPct: (rect.left / vw) * 100,
+      topPct: (rect.top / vh) * 100,
+    });
+  }, [isSplitView, onPanelAnchorChange]);
 
   const updateScrollMetrics = useCallback(() => {
     const el = scrollBodyRef.current;
@@ -501,6 +530,7 @@ export function ResumePanel({
 
   useLayoutEffect(() => {
     if (!node) {
+      onPanelAnchorChange?.(null);
       const id = requestAnimationFrame(() => {
         setHasVerticalScroll(false);
         setShowProjectsScrollCue(false);
@@ -530,6 +560,33 @@ export function ResumePanel({
       el.removeEventListener("scroll", updateScrollMetrics);
     };
   }, [node, updateScrollMetrics]);
+
+  useLayoutEffect(() => {
+    if (!node || !isSplitView) {
+      onPanelAnchorChange?.(null);
+      return;
+    }
+    reportPanelAnchor();
+    const el = asideRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => reportPanelAnchor());
+    ro.observe(el);
+    window.addEventListener("resize", reportPanelAnchor);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", reportPanelAnchor);
+    };
+  }, [
+    activeProjectMiniNodeId,
+    isSplitView,
+    node,
+    onPanelAnchorChange,
+    projectDetail,
+    reportPanelAnchor,
+    splitViewPanelLeft,
+    splitViewPanelTop,
+    splitViewPanelWidth,
+  ]);
 
   useLayoutEffect(() => {
     if (!node || scrollToBulletIndex === null) return;
@@ -598,9 +655,13 @@ export function ResumePanel({
     <AnimatePresence>
       {node && (
         <motion.aside
+          ref={asideRef}
           className={asideClass}
           style={asideStyle}
-          onAnimationComplete={updateScrollMetrics}
+          onAnimationComplete={() => {
+            updateScrollMetrics();
+            reportPanelAnchor();
+          }}
           initial={
             isSplitView
               ? { opacity: 0, x: 120, y: -12, clipPath: "inset(0 100% 0 0 round 1rem)" }
