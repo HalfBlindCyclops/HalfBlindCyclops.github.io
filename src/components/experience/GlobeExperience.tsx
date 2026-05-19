@@ -30,6 +30,8 @@ import { experienceMiniNodes } from "@/data/experienceMiniNodes";
 import { getProjectMiniNodeProfile, projectMiniNodes } from "@/data/projectMiniNodes";
 import { INITIAL_GLOBE_FOCUS, resumeNodes, type ResumeNode } from "@/data/resumeNodes";
 import { ACCENT_COLOR_HEX, colorToRgba } from "@/lib/colorFormat";
+import { miniBulletParts } from "@/lib/projectBullet";
+import type { ResumeProjectDetail } from "@/components/ui/ResumePanel";
 import {
   getFrameOverlaySnapshot,
   setConnectorAnchor as setConnectorAnchorStore,
@@ -282,17 +284,14 @@ function CursorLatLonTracker({
   return null;
 }
 
-function miniBulletParts(bullet: string): { summary: string; details: string } {
-  const clean = bullet.replace(/\*\*/g, "");
-  const colon = clean.indexOf(": ");
-  if (colon > 0 && colon < clean.length - 2) {
-    return {
-      summary: clean.slice(0, colon),
-      details: clean.slice(colon + 2),
-    };
-  }
-  return { summary: clean, details: clean };
-}
+const PROJECT_TRAY_GROUPS: {
+  key: "webDev" | "systems" | "security";
+  label: string;
+}[] = [
+  { key: "webDev", label: "Web dev" },
+  { key: "systems", label: "Systems" },
+  { key: "security", label: "Security" },
+];
 
 function MiniNodeDetailPanel({
   detail,
@@ -541,7 +540,7 @@ export function GlobeExperience() {
               ],
         impact,
         status,
-        links: profile?.links?.length ? profile.links : [{ label: "Reference link", href: "#" }],
+        links: profile?.links?.filter((link) => link.href && link.href !== "#"),
       };
     }
     if (isExperienceSelected && activeExperienceMiniNode && experienceNode) {
@@ -572,12 +571,29 @@ export function GlobeExperience() {
     activeMiniDetail === null &&
     (isMobile || hoveredSectionId === "experience");
   const showProjectsHoverMenu =
-    showPanel?.id === "projects" &&
-    activeMiniDetail === null &&
-    (isMobile || hoveredSectionId === "projects");
-  const showMainResumePanel = !(
-    activeMiniDetail !== null && (isProjectsSelected || isExperienceSelected)
-  );
+    showPanel?.id === "projects" && (isMobile || hoveredSectionId === "projects");
+  const showMainResumePanel = !(activeMiniDetail !== null && isExperienceSelected);
+  const activeProjectDetail: ResumeProjectDetail | null = useMemo(() => {
+    if (!isProjectsSelected || !activeProjectMiniNode || !activeMiniDetail) return null;
+    return {
+      title: activeMiniDetail.title,
+      summary: activeMiniDetail.summary,
+      details: activeMiniDetail.details,
+      chips: activeMiniDetail.chips,
+      highlights: activeMiniDetail.highlights,
+      impact: activeMiniDetail.impact,
+      status: activeMiniDetail.status,
+      links: activeMiniDetail.links?.filter((link) => link.href && link.href !== "#"),
+    };
+  }, [activeMiniDetail, activeProjectMiniNode, isProjectsSelected]);
+  const activeProjectIndex =
+    activeProjectMiniNodeId !== null
+      ? projectMiniNodes.findIndex((node) => node.id === activeProjectMiniNodeId)
+      : -1;
+  const projectNavPosition =
+    activeProjectIndex >= 0
+      ? { current: activeProjectIndex + 1, total: projectMiniNodes.length }
+      : undefined;
   const panelNextNode =
     showPanel === null
       ? null
@@ -624,10 +640,12 @@ export function GlobeExperience() {
     isProjectsSelected,
     selectedNode,
   ]);
-  /** Lower % = higher on screen. Same pin-based beam + same panel lift offset for every resume tab vs the beam. */
-  const streamStartYPercent = selectedNode
-    ? Math.max(12, Math.min(32, 26 - (selectedNode.latitude / 90) * 18))
-    : 22;
+  /** Lower % = higher on screen. Follow active connector target (main node or selected mini node). */
+  const connectorTargetLatitude = connectorTargetLatLon.latitude;
+  const streamStartYPercent =
+    connectorTargetLatitude !== null
+      ? Math.max(12, Math.min(32, 26 - (connectorTargetLatitude / 90) * 18))
+      : 22;
   const streamStartY = `${streamStartYPercent}%`;
   const RESUME_PANEL_LIFT_PCT = 4;
   const resumePanelTopPercent = Math.max(10, streamStartYPercent - RESUME_PANEL_LIFT_PCT);
@@ -638,7 +656,9 @@ export function GlobeExperience() {
     ? "max(6.75rem, 9dvh)"
     : `max(${splitPanelBaseTop}, 11rem)`;
   const splitPanelLeft = `calc(${CONNECTOR_LINE_END_PCT}% + 0.5rem)`;
-  const splitPanelWidth = `min(52rem, calc(100% - ${CONNECTOR_LINE_END_PCT}% - 1.25rem))`;
+  const splitPanelWidth = isProjectsSelected
+    ? `min(58rem, calc(100% - ${CONNECTOR_LINE_END_PCT}% - 1.25rem))`
+    : `min(52rem, calc(100% - ${CONNECTOR_LINE_END_PCT}% - 1.25rem))`;
   // Horizontal beam is h-[2px] with top at streamStartY — center is 1px lower (same coords as SVG viewBox %).
   const streamJunctionYPercent = Math.min(
     100,
@@ -744,6 +764,20 @@ export function GlobeExperience() {
     }
     setPendingExperienceScrollIndex(null);
     setActiveExperienceMiniNodeId(miniNodeId);
+  };
+
+  const onClearProjectSelection = () => {
+    setActiveProjectMiniNodeId(null);
+    setSceneMode("focusing");
+  };
+
+  const onStepProject = (delta: -1 | 1) => {
+    const total = projectMiniNodes.length;
+    if (total === 0) return;
+    const base =
+      activeProjectIndex >= 0 ? activeProjectIndex : delta === 1 ? -1 : 0;
+    const next = (base + delta + total) % total;
+    onSelectProjectMiniNode(projectMiniNodes[next].id);
   };
 
   const onClosePanel = () => {
@@ -1036,44 +1070,60 @@ export function GlobeExperience() {
                               {projectMiniNodes.length} total
                             </div>
                           </div>
-                          <div className="grid grid-cols-2 gap-2.5 md:grid-cols-4">
-                            {projectMiniNodes.map((miniNode) => {
-                              const isMiniActive = activeProjectMiniNodeId === miniNode.id;
+                          <motion.div layout className="space-y-3.5">
+                            {PROJECT_TRAY_GROUPS.map((group) => {
+                              const nodes = projectMiniNodes.filter(
+                                (node) => node.subsection === group.key,
+                              );
+                              if (nodes.length === 0) return null;
                               return (
-                                <button
-                                  key={miniNode.id}
-                                  type="button"
-                                  onClick={() => onSelectProjectMiniNode(miniNode.id)}
-                                  className="group relative overflow-hidden rounded-2xl border px-3 py-2.5 text-left text-xs font-semibold leading-snug shadow-[inset_0_1px_0_rgba(255,255,255,0.1)] transition-all duration-300 hover:-translate-y-0.5 hover:border-violet-300/65 hover:text-white hover:shadow-[0_0_0_1px_rgba(196,181,253,0.24)_inset,0_14px_28px_rgba(2,6,23,0.42)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/80 md:text-[0.8rem]"
-                                  style={
-                                    isMiniActive
-                                      ? {
-                                          borderColor: colorToRgba(ACCENT_COLOR_HEX, 0.88),
-                                          backgroundImage: `linear-gradient(140deg, ${colorToRgba(ACCENT_COLOR_HEX, 0.3)} 0%, ${colorToRgba(ACCENT_COLOR_HEX, 0.16)} 55%, rgba(15, 23, 42, 0.94) 100%)`,
-                                          color: "rgb(240, 249, 255)",
-                                          boxShadow: `0 0 0 1px ${colorToRgba(ACCENT_COLOR_HEX, 0.35)} inset, 0 12px 30px ${colorToRgba(ACCENT_COLOR_HEX, 0.2)}`,
-                                        }
-                                      : {
-                                          borderColor: "rgba(148, 163, 184, 0.4)",
-                                          backgroundImage:
-                                            "linear-gradient(140deg, rgba(30, 41, 59, 0.82) 0%, rgba(15, 23, 42, 0.92) 100%)",
-                                          color: "rgb(226, 232, 240)",
-                                        }
-                                  }
-                                >
-                                  <span className="relative z-10">{miniNode.title}</span>
-                                  <span
-                                    aria-hidden
-                                    className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100"
-                                    style={{
-                                      backgroundImage:
-                                        "radial-gradient(circle at 20% 18%, rgba(167, 139, 250, 0.26) 0%, rgba(15, 23, 42, 0) 56%)",
-                                    }}
-                                  />
-                                </button>
+                                <section key={group.key}>
+                                  <h4 className="mb-2 px-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400">
+                                    {group.label}
+                                  </h4>
+                                  <div className="grid grid-cols-2 gap-2 md:grid-cols-3">
+                                    {nodes.map((miniNode) => {
+                                      const isMiniActive =
+                                        activeProjectMiniNodeId === miniNode.id;
+                                      return (
+                                        <button
+                                          key={miniNode.id}
+                                          type="button"
+                                          onClick={() => onSelectProjectMiniNode(miniNode.id)}
+                                          className="group relative overflow-hidden rounded-2xl border px-3 py-2.5 text-left text-xs font-semibold leading-snug shadow-[inset_0_1px_0_rgba(255,255,255,0.1)] transition-all duration-300 hover:-translate-y-0.5 hover:border-violet-300/65 hover:text-white hover:shadow-[0_0_0_1px_rgba(196,181,253,0.24)_inset,0_14px_28px_rgba(2,6,23,0.42)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/80 md:text-[0.8rem]"
+                                          style={
+                                            isMiniActive
+                                              ? {
+                                                  borderColor: colorToRgba(ACCENT_COLOR_HEX, 0.88),
+                                                  backgroundImage: `linear-gradient(140deg, ${colorToRgba(ACCENT_COLOR_HEX, 0.3)} 0%, ${colorToRgba(ACCENT_COLOR_HEX, 0.16)} 55%, rgba(15, 23, 42, 0.94) 100%)`,
+                                                  color: "rgb(240, 249, 255)",
+                                                  boxShadow: `0 0 0 1px ${colorToRgba(ACCENT_COLOR_HEX, 0.35)} inset, 0 12px 30px ${colorToRgba(ACCENT_COLOR_HEX, 0.2)}`,
+                                                }
+                                              : {
+                                                  borderColor: "rgba(148, 163, 184, 0.4)",
+                                                  backgroundImage:
+                                                    "linear-gradient(140deg, rgba(30, 41, 59, 0.82) 0%, rgba(15, 23, 42, 0.92) 100%)",
+                                                  color: "rgb(226, 232, 240)",
+                                                }
+                                          }
+                                        >
+                                          <span className="relative z-10">{miniNode.title}</span>
+                                          <span
+                                            aria-hidden
+                                            className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+                                            style={{
+                                              backgroundImage:
+                                                "radial-gradient(circle at 20% 18%, rgba(167, 139, 250, 0.26) 0%, rgba(15, 23, 42, 0) 56%)",
+                                            }}
+                                          />
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                </section>
                               );
                             })}
-                          </div>
+                          </motion.div>
                         </motion.div>
                       ) : null}
                     </AnimatePresence>
@@ -1095,7 +1145,9 @@ export function GlobeExperience() {
       />
 
       <ResumePanel
-        node={showMainResumePanel ? showPanel : null}
+        node={
+          showPanel && (showMainResumePanel || showPanel.id === "projects") ? showPanel : null
+        }
         onClose={onClosePanel}
         onGoToNext={
           showPanel && panelNextNode ? () => onSelectNode(panelNextNode) : undefined
@@ -1109,10 +1161,17 @@ export function GlobeExperience() {
         splitViewPanelCenter={false}
         activeProjectMiniNodeId={activeProjectMiniNodeId}
         onSelectProjectMiniNode={onSelectProjectMiniNode}
+        projectDetail={activeProjectDetail}
+        onClearProjectSelection={onClearProjectSelection}
+        onGoToPrevProject={() => onStepProject(-1)}
+        onGoToNextProject={() => onStepProject(1)}
+        projectNavPosition={projectNavPosition}
         scrollToBulletIndex={pendingExperienceScrollIndex}
         onDidScrollToBullet={() => setPendingExperienceScrollIndex(null)}
       />
-      {activeMiniDetail ? <MiniNodeDetailPanel detail={activeMiniDetail} onClose={onClosePanel} /> : null}
+      {activeMiniDetail && isExperienceSelected ? (
+        <MiniNodeDetailPanel detail={activeMiniDetail} onClose={onClosePanel} />
+      ) : null}
       <SceneLoader />
     </section>
   );

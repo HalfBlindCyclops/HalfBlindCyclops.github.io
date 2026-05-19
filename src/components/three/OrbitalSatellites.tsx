@@ -172,27 +172,44 @@ function buildUniqueSatelliteSpecs(): SatelliteSpec[] {
       // Keep constellation structure, but offset each satellite's plane slightly
       // so they do not read like perfectly stacked coplanar rings.
       const slotBlend = plane.count <= 1 ? 0 : s / (plane.count - 1) - 0.5;
-      const microPlaneInclination = slotBlend * 2.6;
-      const microPlaneYaw = slotBlend * 3.2;
+      const microPlaneInclination = slotBlend * 4.6;
+      const microPlaneYaw = slotBlend * 6.2;
       const planeBlend = planeCount <= 1 ? 0 : p / (planeCount - 1) - 0.5;
       const majorPlaneYaw = planeBlend * planeYawSpanDeg;
       const majorPlaneInclination = Math.sin((p + 1) * 1.37) * 4.6;
+      const nodalInclination = jitter(`${id}-nodal-inc`, 1.7);
+      const nodalYaw = jitter(`${id}-nodal-yaw`, 2.8);
+      const eccentricityDrift =
+        plane.layer === "drifter" ? jitter(`${id}-ecc-drift`, 0.02) : jitter(`${id}-ecc-drift`, 0.012);
+      const phaseDrift = ((jitter(`${id}-phase-drift`, 1) * Math.PI) / 180) * 1.2;
       specs.push({
         id,
         radius: plane.radius + jitter(`${id}-r`, plane.radiusJitter),
-        speed: plane.speed,
+        speed: plane.speed + jitter(`${id}-speed`, plane.layer === "drifter" ? 0.0009 : 0.0006),
         phase:
-          phaseAngles[s] + plane.phaseOffset + ((jitter(`${id}-phase-fine`, 1) * Math.PI) / 180) * 0.5,
+          phaseAngles[s] +
+          plane.phaseOffset +
+          ((jitter(`${id}-phase-fine`, 1) * Math.PI) / 180) * 0.5 +
+          phaseDrift,
         inclinationDeg:
           plane.inclinationDeg +
           majorPlaneInclination +
           microPlaneInclination +
+          nodalInclination +
           jitter(`${id}-inc`, plane.inclinationJitter),
-        yawDeg: plane.yawDeg + majorPlaneYaw + microPlaneYaw + jitter(`${id}-yaw`, plane.yawJitter),
+        yawDeg:
+          plane.yawDeg +
+          majorPlaneYaw +
+          microPlaneYaw +
+          nodalYaw +
+          jitter(`${id}-yaw`, plane.yawJitter),
         planeIndex: p,
         slotIndex: s,
         layer: plane.layer,
-        eccentricity: Math.max(0.006, plane.eccentricityBase + jitter(`${id}-ecc`, plane.eccentricityJitter)),
+        eccentricity: Math.max(
+          0.006,
+          plane.eccentricityBase + jitter(`${id}-ecc`, plane.eccentricityJitter) + eccentricityDrift,
+        ),
         argumentOfPerigeeDeg: ((idHash01(`${id}-arg`) * 360) % 360 + 360) % 360,
       });
     }
@@ -297,13 +314,13 @@ const ARC_REBUILD_EPSILON_SQ = 0.00002;
 const PACKET_GAUSS_SIGMA = 0.044;
 const PACKET_CARRIER_PER_SIGMA = 1.22;
 const PACKET_BURST_PEAK = 0.64;
-const PACKET_BASELINE_RIPPLE_AMP = 0.036;
+const PACKET_BASELINE_RIPPLE_AMP = 0.07;
 const PACKET_BASELINE_RIPPLE_FREQ = 2.65;
 const RF_BASE_CYCLES = 5.35;
 const RF_TIME_DRIFT_RAD_PER_SEC = 2.15;
-const RF_PEAK = 0.54;
-const RF_PACKET_BURST_GAIN = 0.82;
-const RF_PACKET_RIPPLE_MIX = 0.58;
+const RF_PEAK = 0.95;
+const RF_PACKET_BURST_GAIN = 1.28;
+const RF_PACKET_RIPPLE_MIX = 0.9;
 const INITIAL_LINE_POINTS = [new Vector3(0, 0, 0), new Vector3(0, 0, 0)] as const;
 
 type MutableLineGeometry = {
@@ -321,16 +338,16 @@ type LineLikeObject = {
 type GroupLikeObject = {
   localToWorld: (point: Vector3) => Vector3;
 };
-const RF_LAYER_MULTIPATH_GAIN = 1.22;
-const RF_CHAOS_GAIN = 1.45;
+const RF_LAYER_MULTIPATH_GAIN = 1.9;
+const RF_CHAOS_GAIN = 2.2;
 const PACKET_TRAVEL_SEC = 1.25;
 // Microwave ripple profile for "live" active links.
 const MICROWAVE_WAVE_CYCLES = 34;
 const MICROWAVE_WAVE_SPEED = 6.4;
-const MICROWAVE_WAVE_AMP = 0.0016;
-const MICROWAVE_WAVE_AMP_REDUCED = 0.0009;
+const MICROWAVE_WAVE_AMP = 0.0048;
+const MICROWAVE_WAVE_AMP_REDUCED = 0.0024;
 // Extra ripple gain when a link is marked as actively carrying path traffic.
-const MICROWAVE_ACTIVE_LINK_BOOST = 1.35;
+const MICROWAVE_ACTIVE_LINK_BOOST = 2.45;
 // Orbit-track rendering is split into this many segments for per-segment fading.
 const ORBIT_SEGMENT_COUNT = 96;
 // Higher values shorten the bright "recently traveled" trail.
@@ -874,10 +891,10 @@ function SignalLine({
       // Sat->ground links keep a stronger RF profile; inter-satellite uses subtle microwave offsets.
       const rfLayer = microwaveStyle
         ? microwaveWave + microwaveBeat
-        : rfLayerNormalOffset(s, phase, timePhase, spatialPhase) * 0.082;
+        : rfLayerNormalOffset(s, phase, timePhase, spatialPhase) * 0.12;
       const burst = microwaveStyle
         ? 0
-        : straightBurstNormalOffset(s, packetCenter, phase, burstShape) * 0.094;
+        : straightBurstNormalOffset(s, packetCenter, phase, burstShape) * 0.14;
       const mixedOffset = rfLayer + burst;
       rfPoints[i]
         .copy(base)
@@ -1056,7 +1073,7 @@ export function OrbitalSatellites({
     const map = new Map<string, MutableRefObject<Vector3>>();
     for (const node of resumeNodes) {
       if (node.id === "about" || node.id === "experience" || node.id === "projects") {
-        map.set(`main:${node.id}`, { current: latLonToVector3(node.latitude, node.longitude, 1.11) });
+        map.set(`main:${node.id}`, { current: latLonToVector3(node.latitude, node.longitude, 1.002) });
       }
     }
     return map;
@@ -1105,7 +1122,7 @@ export function OrbitalSatellites({
     [orbitTrackPoints],
   );
 
-  useFrame(({ clock, camera }, delta) => {
+  useFrame(({ clock }, delta) => {
     const t = clock.elapsedTime;
     const tau = Math.PI * 2;
     satelliteSpecs.forEach((spec, i) => {
@@ -1113,21 +1130,21 @@ export function OrbitalSatellites({
       const theta = t * omega * Math.PI * 2 + spec.phase;
       satThetaRef.current[i] = ((theta % tau) + tau) % tau;
       orbitPoint(spec, theta, satPositionRefs[i].current);
-      const satMesh = satMeshRefs.current[i];
-      if (satMesh) {
-        satMesh.position.copy(satPositionRefs[i].current);
-        // Keep satellite markers as screen-facing upright triangles.
-        satMesh.quaternion.copy(camera.quaternion);
-        const isActiveSat = activeSatIndicesRef.current.has(i);
-        const pulseAmp = reducedMotion ? 0.012 : isActiveSat ? 0.085 : 0.045;
-        const pulse = 1 + Math.sin(t * 2.9 + spec.phase) * pulseAmp;
-        satMesh.scale.setScalar(pulse);
-      }
       orbitPoint(spec, theta + 0.03, orbitAheadSampleRef.current);
       orbitDirectionRef.current
         .copy(orbitAheadSampleRef.current)
         .sub(satPositionRefs[i].current)
         .normalize();
+      const satMesh = satMeshRefs.current[i];
+      if (satMesh) {
+        satMesh.position.copy(satPositionRefs[i].current);
+        // ConeGeometry points up +Y by default; rotate it to follow orbit tangent.
+        satMesh.quaternion.setFromUnitVectors(UP_AXIS, orbitDirectionRef.current);
+        const isActiveSat = activeSatIndicesRef.current.has(i);
+        const pulseAmp = reducedMotion ? 0.012 : isActiveSat ? 0.085 : 0.045;
+        const pulse = 1 + Math.sin(t * 2.9 + spec.phase) * pulseAmp;
+        satMesh.scale.setScalar(pulse);
+      }
       const tickPoints = motionTickPointsRef.current[i];
       tickPoints[0].copy(satPositionRefs[i].current).addScaledVector(orbitDirectionRef.current, 0.002);
       tickPoints[1].copy(satPositionRefs[i].current).addScaledVector(orbitDirectionRef.current, -0.012);

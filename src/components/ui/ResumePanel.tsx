@@ -9,9 +9,23 @@ import {
   type CSSProperties,
   type ReactNode,
 } from "react";
-import { getProjectMiniNodeId } from "@/data/projectMiniNodes";
+import {
+  getProjectMiniNodeProfile,
+  projectMiniNodes,
+  type ProjectMiniNode,
+} from "@/data/projectMiniNodes";
 import type { ResumeNode, ResumeProjectSubsections } from "@/data/resumeNodes";
 import { ACCENT_COLOR_HEX, colorToRgba } from "@/lib/colorFormat";
+export type ResumeProjectDetail = {
+  title: string;
+  summary: string;
+  details: string;
+  chips?: string[];
+  highlights?: string[];
+  impact?: string;
+  status?: string;
+  links?: Array<{ label: string; href: string }>;
+};
 
 const bulletLeadClass =
   "text-lg font-semibold leading-snug tracking-tight text-white md:text-xl md:leading-snug";
@@ -134,11 +148,17 @@ const PROJECT_SUBSECTION_LABELS: Record<keyof ResumeProjectSubsections, string> 
 };
 
 const PROJECT_SUBSECTION_ORDER: (keyof ResumeProjectSubsections)[] = [
+  "webDev",
   "systems",
   "security",
   "others",
-  "webDev",
 ];
+
+const PROJECT_GROUPS = PROJECT_SUBSECTION_ORDER.map((key) => ({
+  key,
+  title: PROJECT_SUBSECTION_LABELS[key],
+  nodes: projectMiniNodes.filter((node) => node.subsection === key),
+})).filter((group) => group.nodes.length > 0);
 
 /** Down chevron at bottom of Projects when content extends below the fold. */
 function ProjectsScrollDownCue() {
@@ -163,51 +183,245 @@ function ProjectsScrollDownCue() {
   );
 }
 
-function ProjectSubsectionsList({
-  subsections,
+function projectCardSubtitle(node: ProjectMiniNode): string {
+  const profile = getProjectMiniNodeProfile(node.id);
+  if (!profile) return "";
+  const parts = [profile.timeframe, profile.role].filter(Boolean);
+  if (parts.length > 0) return parts.join(" · ");
+  return profile.stack.slice(0, 2).join(" · ");
+}
+
+function ProjectIndexButton({
+  node,
+  isActive,
+  onSelect,
+}: {
+  node: ProjectMiniNode;
+  isActive: boolean;
+  onSelect: () => void;
+}) {
+  const subtitle = projectCardSubtitle(node);
+  return (
+    <button
+      type="button"
+      data-project-id={node.id}
+      onClick={onSelect}
+      className="group w-full rounded-xl border px-3 py-2.5 text-left transition hover:border-white/35 hover:bg-white/5"
+      style={
+        isActive
+          ? {
+              borderColor: colorToRgba(ACCENT_COLOR_HEX, 0.58),
+              backgroundColor: colorToRgba(ACCENT_COLOR_HEX, 0.12),
+            }
+          : {
+              borderColor: "rgba(148, 163, 184, 0.28)",
+              backgroundColor: "rgba(15, 23, 42, 0.28)",
+            }
+      }
+    >
+      <p className="text-sm font-semibold leading-snug text-white">{node.title}</p>
+      {subtitle ? (
+        <p className="mt-1 text-xs leading-relaxed text-slate-400 group-hover:text-slate-300">
+          {subtitle}
+        </p>
+      ) : null}
+    </button>
+  );
+}
+
+function ProjectDetailView({
+  detail,
+  onClearSelection,
+  onGoToPrev,
+  onGoToNext,
+  navPosition,
+}: {
+  detail: ResumeProjectDetail;
+  onClearSelection?: () => void;
+  onGoToPrev?: () => void;
+  onGoToNext?: () => void;
+  navPosition?: { current: number; total: number };
+}) {
+  return (
+    <motion.div layout className="space-y-4" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+      <div className="flex flex-wrap items-center gap-2">
+        {onClearSelection ? (
+          <button
+            type="button"
+            onClick={onClearSelection}
+            className="inline-flex items-center gap-1 rounded-full border border-white/25 bg-white/5 px-3 py-1.5 text-xs font-semibold text-slate-200 transition hover:bg-white/10"
+          >
+            <span aria-hidden>←</span> All projects
+          </button>
+        ) : null}
+        {navPosition && onGoToPrev && onGoToNext ? (
+          <motion.div layout className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={onGoToPrev}
+              aria-label="Previous project"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/25 bg-white/5 text-sm text-slate-200 transition hover:bg-white/10"
+            >
+              ‹
+            </button>
+            <span className="px-1 text-xs font-medium tabular-nums text-slate-400">
+              {navPosition.current} / {navPosition.total}
+            </span>
+            <button
+              type="button"
+              onClick={onGoToNext}
+              aria-label="Next project"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/25 bg-white/5 text-sm text-slate-200 transition hover:bg-white/10"
+            >
+              ›
+            </button>
+          </motion.div>
+        ) : null}
+      </div>
+      <h3 className="text-2xl font-semibold tracking-tight text-white md:text-3xl">{detail.title}</h3>
+      <p className="text-lg font-semibold leading-snug text-white">{detail.summary}</p>
+      <p className="text-base leading-7 text-slate-200 md:text-[1.05rem] md:leading-8">{detail.details}</p>
+      {detail.chips && detail.chips.length > 0 ? (
+        <div className="flex flex-wrap gap-2 pt-1">
+          {detail.chips.map((chip) => (
+            <span
+              key={chip}
+              className="rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-medium text-slate-100"
+            >
+              {chip}
+            </span>
+          ))}
+        </div>
+      ) : null}
+      {detail.highlights && detail.highlights.length > 0 ? (
+        <div className="space-y-2 rounded-xl border border-white/15 bg-slate-900/30 p-3.5">
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-300">
+            Highlights
+          </p>
+          <ul className="space-y-1.5 text-sm leading-6 text-slate-200">
+            {detail.highlights.map((item) => (
+              <li key={item} className="flex gap-2">
+                <span
+                  className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full"
+                  style={{ backgroundColor: ACCENT_COLOR_HEX }}
+                />
+                <span>{item}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+      {detail.impact || detail.status ? (
+        <div className="grid gap-2 rounded-xl border border-white/15 bg-slate-900/30 p-3.5 text-sm text-slate-200">
+          {detail.status ? (
+            <p>
+              <span className="font-semibold text-white">Status:</span> {detail.status}
+            </p>
+          ) : null}
+          {detail.impact ? (
+            <p>
+              <span className="font-semibold text-white">Impact:</span> {detail.impact}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+      {detail.links && detail.links.length > 0 ? (
+        <div className="flex flex-wrap gap-2">
+          {detail.links.map((link) => (
+            <a
+              key={`${detail.title}-${link.label}`}
+              href={link.href}
+              target={link.href.startsWith("http") || link.href.startsWith("#") ? "_blank" : undefined}
+              rel={link.href.startsWith("http") ? "noreferrer noopener" : undefined}
+              className="inline-flex items-center rounded-full border px-3 py-1.5 text-xs font-semibold transition hover:brightness-110"
+              style={{
+                borderColor: colorToRgba(ACCENT_COLOR_HEX, 0.45),
+                backgroundColor: colorToRgba(ACCENT_COLOR_HEX, 0.1),
+                color: "rgb(236, 254, 255)",
+              }}
+            >
+              {link.label}
+            </a>
+          ))}
+        </div>
+      ) : null}
+    </motion.div>
+  );
+}
+
+function ProjectsMasterDetail({
+  subsections: _subsections,
   activeProjectMiniNodeId,
   onSelectProjectMiniNode,
+  projectDetail,
+  onClearProjectSelection,
+  onGoToPrevProject,
+  onGoToNextProject,
+  projectNavPosition,
 }: {
   subsections: ResumeProjectSubsections;
   activeProjectMiniNodeId: string | null;
   onSelectProjectMiniNode?: (miniNodeId: string) => void;
+  projectDetail: ResumeProjectDetail | null;
+  onClearProjectSelection?: () => void;
+  onGoToPrevProject?: () => void;
+  onGoToNextProject?: () => void;
+  projectNavPosition?: { current: number; total: number };
 }) {
-  const groups = PROJECT_SUBSECTION_ORDER.map((key) => ({
-    key,
-    title: PROJECT_SUBSECTION_LABELS[key],
-    bullets: subsections[key],
-  })).filter((g) => g.bullets.length > 0);
+  const hasSelection = projectDetail !== null;
 
   return (
-    <div className="space-y-8 md:space-y-9">
-      {groups.map((group, groupIndex) => (
-        <section key={group.title} aria-labelledby={`project-sub-${groupIndex}`}>
-          <h3
-            id={`project-sub-${groupIndex}`}
-            className="text-xl font-semibold tracking-tight text-white md:text-2xl"
-          >
-            {group.title}
-          </h3>
-          <ul className="mt-4 space-y-5 md:mt-5 md:space-y-6">
-            {group.bullets.map((bullet, index) => {
-              const miniNodeId = getProjectMiniNodeId(group.key, index);
-              return (
-                <StructuredBullet
-                  key={bullet}
-                  bullet={bullet}
-                  index={index}
-                  onClick={
-                    onSelectProjectMiniNode && miniNodeId
-                      ? () => onSelectProjectMiniNode(miniNodeId)
-                      : undefined
-                  }
-                  isActive={activeProjectMiniNodeId !== null && activeProjectMiniNodeId === miniNodeId}
-                />
-              );
-            })}
-          </ul>
-        </section>
-      ))}
+    <div className="flex min-h-0 flex-1 flex-col gap-4 md:flex-row md:gap-5">
+      <nav
+        className={
+          hasSelection
+            ? "min-h-0 shrink-0 md:max-h-full md:w-[12.5rem] md:overflow-y-auto md:overscroll-y-contain md:pr-1"
+            : "min-h-0 shrink-0"
+        }
+        aria-label="Project list"
+      >
+        <div className="space-y-5">
+          {PROJECT_GROUPS.map((group) => (
+            <section key={group.key}>
+              <h3 className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">
+                {group.title}
+              </h3>
+              <ul className="mt-2 space-y-2">
+                {group.nodes.map((node) => (
+                  <li key={node.id}>
+                    {onSelectProjectMiniNode ? (
+                      <ProjectIndexButton
+                        node={node}
+                        isActive={activeProjectMiniNodeId === node.id}
+                        onSelect={() => onSelectProjectMiniNode(node.id)}
+                      />
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ))}
+        </div>
+      </nav>
+      <div className="min-h-0 min-w-0 flex-1 md:overflow-y-auto md:overscroll-y-contain">
+        {hasSelection && projectDetail ? (
+          <ProjectDetailView
+            detail={projectDetail}
+            onClearSelection={onClearProjectSelection}
+            onGoToPrev={onGoToPrevProject}
+            onGoToNext={onGoToNextProject}
+            navPosition={projectNavPosition}
+          />
+        ) : (
+          <div className="rounded-xl border border-dashed border-white/15 bg-slate-900/20 px-4 py-8 text-center md:py-12">
+            <p className="text-base font-medium text-slate-200">Choose a project</p>
+            <p className="mt-2 text-sm leading-relaxed text-slate-400">
+              Pick from the list, the globe, or the Project nodes menu above to read highlights,
+              stack, and impact.
+            </p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -232,6 +446,11 @@ type ResumePanelProps = {
   splitViewPanelCenter?: boolean;
   activeProjectMiniNodeId?: string | null;
   onSelectProjectMiniNode?: (miniNodeId: string) => void;
+  projectDetail?: ResumeProjectDetail | null;
+  onClearProjectSelection?: () => void;
+  onGoToPrevProject?: () => void;
+  onGoToNextProject?: () => void;
+  projectNavPosition?: { current: number; total: number };
   scrollToBulletIndex?: number | null;
   onDidScrollToBullet?: () => void;
 };
@@ -249,6 +468,11 @@ export function ResumePanel({
   splitViewPanelCenter = false,
   activeProjectMiniNodeId = null,
   onSelectProjectMiniNode,
+  projectDetail = null,
+  onClearProjectSelection,
+  onGoToPrevProject,
+  onGoToNextProject,
+  projectNavPosition,
   scrollToBulletIndex = null,
   onDidScrollToBullet,
 }: ResumePanelProps) {
@@ -319,6 +543,19 @@ export function ResumePanel({
     });
   }, [node, onDidScrollToBullet, scrollToBulletIndex]);
 
+  useLayoutEffect(() => {
+    if (!node || node.id !== "projects" || !activeProjectMiniNodeId) return;
+    const host = scrollBodyRef.current;
+    if (!host) return;
+    const target = host.querySelector<HTMLElement>(
+      `[data-project-id="${activeProjectMiniNodeId}"]`,
+    );
+    if (!target) return;
+    requestAnimationFrame(() => {
+      target.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    });
+  }, [activeProjectMiniNodeId, node]);
+
   const splitTop = splitViewPanelTop ?? `calc(${streamStartY} + 1rem)`;
   const splitAnchored =
     Boolean(isSplitView && splitViewPanelLeft && splitViewPanelWidth);
@@ -345,7 +582,7 @@ export function ResumePanel({
     "top-[max(5.5rem,8dvh)] -translate-y-0 sm:top-[max(6rem,10dvh)] " +
     "md:top-auto md:max-h-[min(88vh,calc(100dvh-5rem))] md:translate-x-0 md:translate-y-0 md:p-8 " +
     (splitAnchored
-      ? "md:left-auto md:top-auto md:w-auto"
+      ? "md:left-auto md:top-auto md:w-auto md:max-w-[min(58rem,calc(100vw-3rem))]"
       : "md:left-auto md:w-[36rem] md:max-w-[min(36rem,calc(100vw-3rem))] " +
         (isSplitView ? "md:right-[2.75rem]" : ""));
   const asideStyle: CSSProperties = {
@@ -384,8 +621,11 @@ export function ResumePanel({
           <div className="mb-5 flex shrink-0 items-start justify-between gap-4">
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-x-5 gap-y-2 md:gap-x-6">
-                <h2 className="text-4xl font-semibold leading-none tracking-tight text-white md:text-5xl">
-                  {node.title}
+                <h2
+                  className="text-4xl font-semibold leading-none tracking-tight text-white md:text-5xl"
+                  style={{ fontFamily: "var(--font-orbitron), sans-serif" }}
+                >
+                  {node.id === "about" ? "Sean Wetherell" : node.title}
                 </h2>
                 {onGoToNext ? (
                   <button
@@ -442,10 +682,15 @@ export function ResumePanel({
               style={scrollBodyAccent}
             >
               {node.id === "projects" && node.projectSubsections ? (
-                <ProjectSubsectionsList
+                <ProjectsMasterDetail
                   subsections={node.projectSubsections}
                   activeProjectMiniNodeId={activeProjectMiniNodeId}
                   onSelectProjectMiniNode={onSelectProjectMiniNode}
+                  projectDetail={projectDetail}
+                  onClearProjectSelection={onClearProjectSelection}
+                  onGoToPrevProject={onGoToPrevProject}
+                  onGoToNextProject={onGoToNextProject}
+                  projectNavPosition={projectNavPosition}
                 />
               ) : (
                 <ul className="space-y-5 md:space-y-6">
