@@ -31,6 +31,7 @@ import { getProjectMiniNodeProfile, projectMiniNodes } from "@/data/projectMiniN
 import { INITIAL_GLOBE_FOCUS, resumeNodes, type ResumeNode } from "@/data/resumeNodes";
 import { ACCENT_COLOR_HEX, colorToRgba } from "@/lib/colorFormat";
 import { miniBulletParts } from "@/lib/projectBullet";
+import { computeConnectorBeamLayout } from "@/lib/connectorBeam";
 import type { ResumeProjectDetail } from "@/components/ui/ResumePanel";
 import {
   getFrameOverlaySnapshot,
@@ -421,6 +422,9 @@ function ConnectorOverlay({
   connectorPathsActive,
   streamJunctionYPercent,
   streamStartY,
+  beamBarLeftPct,
+  beamBarWidthPct,
+  beamXJunction,
   reducedMotion,
 }: {
   selectedNode: ResumeNode | null;
@@ -428,6 +432,9 @@ function ConnectorOverlay({
   connectorPathsActive: boolean;
   streamJunctionYPercent: number;
   streamStartY: string;
+  beamBarLeftPct: number;
+  beamBarWidthPct: number;
+  beamXJunction: number;
   reducedMotion: boolean;
 }) {
   const { connector } = useSyncExternalStore(
@@ -453,6 +460,7 @@ function ConnectorOverlay({
                 pinX={connector.xPercent}
                 pinY={connector.yPercent}
                 yJunction={streamJunctionYPercent}
+                xJunction={beamXJunction}
                 reducedMotion={reducedMotion}
                 pathsActive
               />
@@ -463,8 +471,8 @@ function ConnectorOverlay({
             className="absolute h-[2px] rounded-full"
             style={{
               top: streamStartY,
-              left: `${CONNECTOR_BAR_LEFT_PCT}%`,
-              width: `${CONNECTOR_BAR_WIDTH_PCT}%`,
+              left: `${beamBarLeftPct}%`,
+              width: `${beamBarWidthPct}%`,
               transformOrigin: "left center",
               backgroundColor: ACCENT_COLOR_HEX,
               boxShadow: `0 0 6px ${colorToRgba(ACCENT_COLOR_HEX, 0.5)}, 0 0 14px ${colorToRgba(ACCENT_COLOR_HEX, 0.25)}`,
@@ -613,6 +621,11 @@ export function GlobeExperience() {
     selectedNode !== null &&
     sceneMode === "focused" &&
     connectorPathsActive;
+  const frameOverlay = useSyncExternalStore(
+    subscribeFrameOverlay,
+    getFrameOverlaySnapshot,
+    getFrameOverlaySnapshot,
+  );
   const connectorTargetLatLon = useMemo(() => {
     if (isProjectsSelected && activeProjectMiniNode) {
       return {
@@ -640,13 +653,30 @@ export function GlobeExperience() {
     isProjectsSelected,
     selectedNode,
   ]);
-  /** Lower % = higher on screen. Follow active connector target (main node or selected mini node). */
+  const connectorBeamLayout = useMemo(() => {
+    if (!frameOverlay.connector.visible) return null;
+    return computeConnectorBeamLayout(
+      frameOverlay.connector.xPercent,
+      frameOverlay.connector.yPercent,
+      CONNECTOR_LINE_END_PCT,
+      CONNECTOR_BAR_LEFT_PCT,
+    );
+  }, [
+    frameOverlay.connector.visible,
+    frameOverlay.connector.xPercent,
+    frameOverlay.connector.yPercent,
+  ]);
+  /** Lower % = higher on screen. Prefer live pin Y; fall back to latitude heuristic before anchor is visible. */
   const connectorTargetLatitude = connectorTargetLatLon.latitude;
   const streamStartYPercent =
-    connectorTargetLatitude !== null
+    connectorBeamLayout?.streamStartYPercent ??
+    (connectorTargetLatitude !== null
       ? Math.max(12, Math.min(32, 26 - (connectorTargetLatitude / 90) * 18))
-      : 22;
+      : 22);
   const streamStartY = `${streamStartYPercent}%`;
+  const beamBarLeftPct = connectorBeamLayout?.barLeftPct ?? CONNECTOR_BAR_LEFT_PCT;
+  const beamBarWidthPct = connectorBeamLayout?.barWidthPct ?? CONNECTOR_BAR_WIDTH_PCT;
+  const beamXJunction = connectorBeamLayout?.xJunction ?? CONNECTOR_BAR_LEFT_PCT;
   const RESUME_PANEL_LIFT_PCT = 4;
   const resumePanelTopPercent = Math.max(10, streamStartYPercent - RESUME_PANEL_LIFT_PCT);
   const splitPanelBaseTop = `calc(${resumePanelTopPercent}% + 1rem)`;
@@ -655,14 +685,15 @@ export function GlobeExperience() {
   const splitPanelTop = useTallRightPanelLayout
     ? "max(6.75rem, 9dvh)"
     : `max(${splitPanelBaseTop}, 11rem)`;
-  const splitPanelLeft = `calc(${CONNECTOR_LINE_END_PCT}% + 0.5rem)`;
+  const splitPanelLeft = `${CONNECTOR_LINE_END_PCT}%`;
   const splitPanelWidth = isProjectsSelected
     ? `min(58rem, calc(100% - ${CONNECTOR_LINE_END_PCT}% - 1.25rem))`
     : `min(52rem, calc(100% - ${CONNECTOR_LINE_END_PCT}% - 1.25rem))`;
   // Horizontal beam is h-[2px] with top at streamStartY — center is 1px lower (same coords as SVG viewBox %).
   const streamJunctionYPercent = Math.min(
     100,
-    streamStartYPercent + (1 / Math.max(1, sectionHeight)) * 100,
+    (connectorBeamLayout?.yJunction ?? streamStartYPercent) +
+      (1 / Math.max(1, sectionHeight)) * 100,
   );
 
   useEffect(() => {
@@ -1141,6 +1172,9 @@ export function GlobeExperience() {
         connectorPathsActive={connectorPathsActive}
         streamJunctionYPercent={streamJunctionYPercent}
         streamStartY={streamStartY}
+        beamBarLeftPct={beamBarLeftPct}
+        beamBarWidthPct={beamBarWidthPct}
+        beamXJunction={beamXJunction}
         reducedMotion={Boolean(prefersReducedMotion)}
       />
 

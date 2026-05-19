@@ -246,6 +246,7 @@ function RfLinkPaths({
   pinX,
   pinY,
   yJunction,
+  xJunction,
   reducedMotion,
   pathsActive,
   lineColor = ACCENT_COLOR_HEX,
@@ -253,6 +254,7 @@ function RfLinkPaths({
   pinX: number;
   pinY: number;
   yJunction: number;
+  xJunction: number;
   reducedMotion: boolean;
     /** When false, paths are cleared and the RF loop is paused. */
   pathsActive: boolean;
@@ -260,10 +262,10 @@ function RfLinkPaths({
 }) {
   const rfLayerRef = useRef<SVGPathElement | null>(null);
   const chordRef = useRef<SVGPathElement | null>(null);
-  const propsRef = useRef({ pinX, pinY, yJ: yJunction });
+  const propsRef = useRef({ pinX, pinY, yJ: yJunction, xJ: xJunction });
   useLayoutEffect(() => {
-    propsRef.current = { pinX, pinY, yJ: yJunction };
-  }, [pinX, pinY, yJunction]);
+    propsRef.current = { pinX, pinY, yJ: yJunction, xJ: xJunction };
+  }, [pinX, pinY, yJunction, xJunction]);
 
   useEffect(() => {
     if (!pathsActive) {
@@ -273,15 +275,15 @@ function RfLinkPaths({
     }
 
     const apply = (packetCenter: number, timePhase: number, burstKey: number) => {
-      const { pinX: px, pinY: py, yJ } = propsRef.current;
+      const { pinX: px, pinY: py, yJ, xJ } = propsRef.current;
       const phase = px * 0.083 + py * 0.057;
       const spatialPhase = px * 0.092 + py * 0.068;
-      const rfD = buildRfLayerPathD(px, py, yJ, JUNCTION_X, timePhase, spatialPhase, phase);
+      const rfD = buildRfLayerPathD(px, py, yJ, xJ, timePhase, spatialPhase, phase);
       const chordD = buildStraightChordWithBurstPathD(
         px,
         py,
         yJ,
-        JUNCTION_X,
+        xJ,
         packetCenter,
         phase,
         burstKey,
@@ -312,7 +314,7 @@ function RfLinkPaths({
     };
     rafId = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(rafId);
-  }, [pathsActive, pinX, pinY, yJunction, reducedMotion]);
+  }, [pathsActive, pinX, pinY, yJunction, xJunction, reducedMotion]);
 
   const pathRender = {
     shapeRendering: "geometricPrecision" as const,
@@ -353,6 +355,8 @@ type ResumeConnectorProps = {
   pinX: number;
   pinY: number;
   yJunction: number;
+  /** Beam junction X in viewBox %; defaults to {@link JUNCTION_X}. */
+  xJunction?: number;
   reducedMotion: boolean;
   /** When false, paths are hidden and the RF loop pauses (e.g. brief gap when switching pins). */
   pathsActive: boolean;
@@ -363,6 +367,7 @@ export function ResumeConnector({
   pinX,
   pinY,
   yJunction,
+  xJunction = JUNCTION_X,
   reducedMotion,
   pathsActive,
   lineColor = ACCENT_COLOR_HEX,
@@ -382,6 +387,7 @@ export function ResumeConnector({
         pinX={pinX}
         pinY={pinY}
         yJunction={yJunction}
+        xJunction={xJunction}
         reducedMotion={reducedMotion}
         pathsActive={pathsActive}
         lineColor="currentColor"
