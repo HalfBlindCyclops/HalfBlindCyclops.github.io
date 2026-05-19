@@ -31,7 +31,10 @@ import { getProjectMiniNodeProfile, projectMiniNodes } from "@/data/projectMiniN
 import { INITIAL_GLOBE_FOCUS, resumeNodes, type ResumeNode } from "@/data/resumeNodes";
 import { ACCENT_COLOR_HEX, colorToRgba } from "@/lib/colorFormat";
 import { miniBulletParts } from "@/lib/projectBullet";
-import { computeConnectorBeamLayout } from "@/lib/connectorBeam";
+import {
+  computeConnectorBeamLayout,
+  tallPanelConnectorYPercent,
+} from "@/lib/connectorBeam";
 import type { ResumeProjectDetail } from "@/components/ui/ResumePanel";
 import {
   getFrameOverlaySnapshot,
@@ -653,11 +656,22 @@ export function GlobeExperience() {
     isProjectsSelected,
     selectedNode,
   ]);
+  const connectorTargetLatitude = connectorTargetLatLon.latitude;
+  const latitudeAnchorYPercent =
+    connectorTargetLatitude !== null
+      ? Math.max(12, Math.min(32, 26 - (connectorTargetLatitude / 90) * 18))
+      : 22;
+  const useTallRightPanelLayout = isSplitView && (isProjectsSelected || isExperienceSelected);
+  /** Horizontal beam row: tall panels anchor at top-left; About follows latitude heuristic. */
+  const panelConnectorYPercent = useTallRightPanelLayout
+    ? tallPanelConnectorYPercent(sectionHeight)
+    : latitudeAnchorYPercent;
   const connectorBeamLayout = useMemo(() => {
     if (!frameOverlay.connector.visible) return null;
     return computeConnectorBeamLayout(
       frameOverlay.connector.xPercent,
       frameOverlay.connector.yPercent,
+      panelConnectorYPercent,
       CONNECTOR_LINE_END_PCT,
       CONNECTOR_BAR_LEFT_PCT,
     );
@@ -665,14 +679,10 @@ export function GlobeExperience() {
     frameOverlay.connector.visible,
     frameOverlay.connector.xPercent,
     frameOverlay.connector.yPercent,
+    panelConnectorYPercent,
   ]);
-  /** Lower % = higher on screen. Prefer live pin Y; fall back to latitude heuristic before anchor is visible. */
-  const connectorTargetLatitude = connectorTargetLatLon.latitude;
   const streamStartYPercent =
-    connectorBeamLayout?.streamStartYPercent ??
-    (connectorTargetLatitude !== null
-      ? Math.max(12, Math.min(32, 26 - (connectorTargetLatitude / 90) * 18))
-      : 22);
+    connectorBeamLayout?.streamStartYPercent ?? panelConnectorYPercent;
   const streamStartY = `${streamStartYPercent}%`;
   const beamBarLeftPct = connectorBeamLayout?.barLeftPct ?? CONNECTOR_BAR_LEFT_PCT;
   const beamBarWidthPct = connectorBeamLayout?.barWidthPct ?? CONNECTOR_BAR_WIDTH_PCT;
@@ -680,7 +690,6 @@ export function GlobeExperience() {
   const RESUME_PANEL_LIFT_PCT = 4;
   const resumePanelTopPercent = Math.max(10, streamStartYPercent - RESUME_PANEL_LIFT_PCT);
   const splitPanelBaseTop = `calc(${resumePanelTopPercent}% + 1rem)`;
-  const useTallRightPanelLayout = isSplitView && (isProjectsSelected || isExperienceSelected);
   // Projects/Experience should occupy the right column from near the top nav, not the connector line.
   const splitPanelTop = useTallRightPanelLayout
     ? "max(6.75rem, 9dvh)"
