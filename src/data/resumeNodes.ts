@@ -51,7 +51,7 @@ export const resumeNodes: ResumeNode[] = [
   {
     id: "experience",
     title: "Experience",
-    subtitle: "Research, media, consulting, and earlier roles",
+    subtitle: "",
     /** Globe pin: Europe-centered cluster anchor for the Experience node set. */
     latitude: 51.5072,
     longitude: -0.1276,
