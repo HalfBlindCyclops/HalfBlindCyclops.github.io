@@ -32,17 +32,15 @@ import {
   JUNCTION_X,
   ResumeConnector,
 } from "@/components/ui/ResumeConnector";
-import { experienceMiniNodes } from "@/data/experienceMiniNodes";
 import { getProjectMiniNodeProfile, projectMiniNodes } from "@/data/projectMiniNodes";
 import { INITIAL_GLOBE_FOCUS, resumeNodes, type ResumeNode } from "@/data/resumeNodes";
 import { ACCENT_COLOR_HEX, colorToRgba } from "@/lib/colorFormat";
 import { miniBulletParts } from "@/lib/projectBullet";
 import type { ResumePanelAnchor, ResumeProjectDetail } from "@/components/ui/ResumePanel";
-import { connectorMotion, motionDelayMs, motionDuration, motionEase } from "@/lib/motion";
+import { connectorMotion, motionDuration, motionEase } from "@/lib/motion";
 import {
   SURFACE_INSET,
   SURFACE_PILL_BUTTON,
-  SURFACE_POPOVER,
   SURFACE_SHELL_LIGHT,
 } from "@/lib/uiSurfaces";
 import {
@@ -504,10 +502,7 @@ export function GlobeExperience() {
     sunDirectionForDate(new Date()),
   );
   const [selectedNode, setSelectedNode] = useState<ResumeNode | null>(null);
-  const [hoveredSectionId, setHoveredSectionId] = useState<string | null>(null);
   const [activeProjectMiniNodeId, setActiveProjectMiniNodeId] = useState<string | null>(null);
-  const [activeExperienceMiniNodeId, setActiveExperienceMiniNodeId] = useState<string | null>(null);
-  const [pendingExperienceScrollIndex, setPendingExperienceScrollIndex] = useState<number | null>(null);
   const [sceneMode, setSceneMode] = useState<SceneMode>("idle");
   const [resumePanelAnchor, setResumePanelAnchor] = useState<ResumePanelAnchor | null>(null);
   const handleResumePanelAnchorChange = useCallback((next: ResumePanelAnchor | null) => {
@@ -533,14 +528,9 @@ export function GlobeExperience() {
   const isProjectsSelected = selectedNode?.id === "projects";
   const isExperienceSelected = selectedNode?.id === "experience";
   const projectsNode = useMemo(() => resumeNodes.find((node) => node.id === "projects") ?? null, []);
-  const experienceNode = useMemo(() => resumeNodes.find((node) => node.id === "experience") ?? null, []);
   const activeProjectMiniNode =
     activeProjectMiniNodeId !== null
       ? projectMiniNodes.find((mini) => mini.id === activeProjectMiniNodeId) ?? null
-      : null;
-  const activeExperienceMiniNode =
-    activeExperienceMiniNodeId !== null
-      ? experienceMiniNodes.find((mini) => mini.id === activeExperienceMiniNodeId) ?? null
       : null;
   const activeMiniDetail: MiniDetailInfo | null = useMemo(() => {
     if (isProjectsSelected && activeProjectMiniNode && projectsNode?.projectSubsections) {
@@ -574,34 +564,12 @@ export function GlobeExperience() {
         links: profile?.links?.filter((link) => link.href && link.href !== "#"),
       };
     }
-    if (isExperienceSelected && activeExperienceMiniNode && experienceNode) {
-      const bullet = experienceNode.bullets[activeExperienceMiniNode.bulletIndex] ?? "";
-      const { summary, details } = miniBulletParts(bullet);
-      return {
-        title: activeExperienceMiniNode.title,
-        groupLabel: "Experience detail",
-        summary,
-        details,
-      };
-    }
     return null;
-  }, [
-    activeExperienceMiniNode,
-    activeProjectMiniNode,
-    experienceNode,
-    isExperienceSelected,
-    isProjectsSelected,
-    projectsNode,
-  ]);
+  }, [activeProjectMiniNode, isProjectsSelected, projectsNode]);
   const showPanel =
     selectedNode !== null && (sceneMode === "focusing" || sceneMode === "focused")
       ? selectedNode
       : null;
-  const showExperienceHoverMenu =
-    showPanel?.id === "experience" &&
-    activeMiniDetail === null &&
-    (isMobile || hoveredSectionId === "experience");
-  const showMainResumePanel = !(activeMiniDetail !== null && isExperienceSelected);
   const activeProjectDetail: ResumeProjectDetail | null = useMemo(() => {
     if (!isProjectsSelected || !activeProjectMiniNode || !activeMiniDetail) return null;
     return {
@@ -637,20 +605,10 @@ export function GlobeExperience() {
       return "Projects / Browse";
     }
     if (isExperienceSelected) {
-      if (activeExperienceMiniNode) {
-        return `Experience / ${activeExperienceMiniNode.title}`;
-      }
-      return "Experience / Browse";
+      return "Experience";
     }
     return selectedNode.title;
-  }, [
-    activeExperienceMiniNode,
-    activeProjectMiniNode,
-    isExperienceSelected,
-    isProjectsSelected,
-    projectBreadcrumb,
-    selectedNode,
-  ]);
+  }, [activeProjectMiniNode, isExperienceSelected, isProjectsSelected, projectBreadcrumb, selectedNode]);
   const panelNextNode =
     showPanel === null
       ? null
@@ -660,7 +618,6 @@ export function GlobeExperience() {
   /** Two-phase switch: hide signal line first, then commit node swap next frame. */
   const [connectorPathsActive, setConnectorPathsActive] = useState(true);
   const switchRafRef = useRef<number | null>(null);
-  const hoverCloseTimeoutRef = useRef<number | null>(null);
   /** Desktop: resume panel + connector overlay the right side; globe renders full-viewport (no canvas clip). */
   const isSplitView = !isMobile;
   /** Match split-view globe framing so top UI anchors to globe center. */
@@ -677,12 +634,6 @@ export function GlobeExperience() {
         longitude: activeProjectMiniNode.longitude,
       };
     }
-    if (isExperienceSelected && activeExperienceMiniNode) {
-      return {
-        latitude: activeExperienceMiniNode.latitude,
-        longitude: activeExperienceMiniNode.longitude,
-      };
-    }
     if (selectedNode) {
       return {
         latitude: selectedNode.latitude,
@@ -691,9 +642,7 @@ export function GlobeExperience() {
     }
     return { latitude: null, longitude: null };
   }, [
-    activeExperienceMiniNode,
     activeProjectMiniNode,
-    isExperienceSelected,
     isProjectsSelected,
     selectedNode,
   ]);
@@ -746,30 +695,9 @@ export function GlobeExperience() {
       if (switchRafRef.current !== null) {
         cancelAnimationFrame(switchRafRef.current);
       }
-      if (hoverCloseTimeoutRef.current !== null) {
-        window.clearTimeout(hoverCloseTimeoutRef.current);
-      }
     },
     [],
   );
-
-  const openHoverTray = (id: string) => {
-    if (hoverCloseTimeoutRef.current !== null) {
-      window.clearTimeout(hoverCloseTimeoutRef.current);
-      hoverCloseTimeoutRef.current = null;
-    }
-    setHoveredSectionId(id);
-  };
-
-  const closeHoverTraySoon = (id: string) => {
-    if (hoverCloseTimeoutRef.current !== null) {
-      window.clearTimeout(hoverCloseTimeoutRef.current);
-    }
-    hoverCloseTimeoutRef.current = window.setTimeout(() => {
-      setHoveredSectionId((current) => (current === id ? null : current));
-      hoverCloseTimeoutRef.current = null;
-    }, motionDelayMs.hoverTrayDismiss);
-  };
 
   const onSelectNode = (node: ResumeNode) => {
     if (selectedNode?.id === node.id) return;
@@ -781,10 +709,7 @@ export function GlobeExperience() {
       // Phase 2: commit node change on next frame.
       switchRafRef.current = requestAnimationFrame(() => {
         setSelectedNode(node);
-        setHoveredSectionId(null);
         if (node.id !== "projects") setActiveProjectMiniNodeId(null);
-        if (node.id !== "experience") setActiveExperienceMiniNodeId(null);
-        setPendingExperienceScrollIndex(null);
         setSceneMode("focusing");
       });
       return;
@@ -793,15 +718,11 @@ export function GlobeExperience() {
     // Initial selection.
     setConnectorPathsActive(false);
     setSelectedNode(node);
-    setHoveredSectionId(null);
     if (node.id !== "projects") setActiveProjectMiniNodeId(null);
-    if (node.id !== "experience") setActiveExperienceMiniNodeId(null);
-    setPendingExperienceScrollIndex(null);
     setSceneMode("focusing");
   };
 
   const onSelectProjectMiniNode = (miniNodeId: string) => {
-    setHoveredSectionId(null);
     if (selectedNode?.id !== "projects") {
       const projectsNode = resumeNodes.find((node) => node.id === "projects");
       if (!projectsNode) return;
@@ -811,23 +732,7 @@ export function GlobeExperience() {
     } else {
       setSceneMode("focusing");
     }
-    setPendingExperienceScrollIndex(null);
     setActiveProjectMiniNodeId(miniNodeId);
-  };
-
-  const onSelectExperienceMiniNode = (miniNodeId: string) => {
-    setHoveredSectionId(null);
-    if (selectedNode?.id !== "experience") {
-      const experienceNode = resumeNodes.find((node) => node.id === "experience");
-      if (!experienceNode) return;
-      setConnectorPathsActive(false);
-      setSelectedNode(experienceNode);
-      setSceneMode("focusing");
-    } else {
-      setSceneMode("focusing");
-    }
-    setPendingExperienceScrollIndex(null);
-    setActiveExperienceMiniNodeId(miniNodeId);
   };
 
   const onClearProjectSelection = () => {
@@ -846,11 +751,8 @@ export function GlobeExperience() {
 
   const onClosePanel = () => {
     setConnectorPathsActive(false);
-    setHoveredSectionId(null);
     setResumePanelAnchor(null);
     setActiveProjectMiniNodeId(null);
-    setActiveExperienceMiniNodeId(null);
-    setPendingExperienceScrollIndex(null);
     setSelectedNode(null);
     // Keep the current camera pose; only close UI overlays.
     setSceneMode("idle");
@@ -877,12 +779,6 @@ export function GlobeExperience() {
           onClearProjectSelection();
           return;
         }
-        if (isExperienceSelected && activeExperienceMiniNodeId) {
-          event.preventDefault();
-          setActiveExperienceMiniNodeId(null);
-          setSceneMode("focusing");
-          return;
-        }
         if (selectedNode) {
           event.preventDefault();
           onClosePanel();
@@ -899,9 +795,7 @@ export function GlobeExperience() {
     window.addEventListener("keydown", onWindowKeyDown);
     return () => window.removeEventListener("keydown", onWindowKeyDown);
   }, [
-    activeExperienceMiniNodeId,
     activeProjectMiniNodeId,
-    isExperienceSelected,
     isProjectsSelected,
     onClearProjectSelection,
     onClosePanel,
@@ -967,14 +861,14 @@ export function GlobeExperience() {
               <GlobeNodes
                 activeNodeId={activeNodeId}
                 activeProjectMiniNodeId={activeProjectMiniNodeId}
-                activeExperienceMiniNodeId={activeExperienceMiniNodeId}
+                activeExperienceMiniNodeId={null}
                 showProjectMiniNodes
-                showExperienceMiniNodes
+                showExperienceMiniNodes={false}
                 reducedMotion={Boolean(prefersReducedMotion)}
                 accentColor={ACCENT_COLOR_HEX}
                 onSelect={onSelectNode}
                 onSelectProjectMiniNode={onSelectProjectMiniNode}
-                onSelectExperienceMiniNode={onSelectExperienceMiniNode}
+                onSelectExperienceMiniNode={() => {}}
               />
               <OrbitalSatellites
                 accentColor={ACCENT_COLOR_HEX}
@@ -1029,8 +923,6 @@ export function GlobeExperience() {
           >
             {resumeNodes.map((node) => {
               const isActive = activeNodeId === node.id;
-              const isExpandable = node.id === "experience";
-              const isMenuOpen = node.id === "experience" && showExperienceHoverMenu;
               const nodeGlowColor =
                 node.id === "experience"
                   ? "rgba(56, 189, 248, 0.5)"
@@ -1045,30 +937,16 @@ export function GlobeExperience() {
                     boxShadow: `0 0 0 1px ${colorToRgba(ACCENT_COLOR_HEX, 0.45)} inset, 0 0 28px ${colorToRgba(ACCENT_COLOR_HEX, 0.24)}, 0 10px 36px rgba(2, 6, 23, 0.55)`,
                   }
                 : {
-                    borderColor: isExpandable ? "rgba(148, 163, 184, 0.42)" : "rgba(255, 255, 255, 0.24)",
-                    backgroundImage: isExpandable
-                      ? "linear-gradient(135deg, rgba(30, 41, 59, 0.82) 0%, rgba(15, 23, 42, 0.88) 55%, rgba(2, 6, 23, 0.94) 100%)"
-                      : "linear-gradient(135deg, rgba(30, 41, 59, 0.7) 0%, rgba(15, 23, 42, 0.78) 100%)",
+                    borderColor: "rgba(255, 255, 255, 0.24)",
+                    backgroundImage: "linear-gradient(135deg, rgba(30, 41, 59, 0.7) 0%, rgba(15, 23, 42, 0.78) 100%)",
                     color: "rgb(226, 232, 240)",
                     boxShadow: "0 10px 24px rgba(2, 6, 23, 0.38)",
                   };
               return (
-                <div
-                  key={node.id}
-                  className="relative"
-                  onMouseEnter={() => {
-                    if (node.id === "experience") openHoverTray(node.id);
-                  }}
-                  onMouseLeave={() => {
-                    if (node.id === "experience") closeHoverTraySoon(node.id);
-                  }}
-                >
+                <div key={node.id} className="relative">
                   <button
                     type="button"
                     onClick={() => onSelectNode(node)}
-                    onFocus={() => {
-                      if (node.id === "experience") openHoverTray(node.id);
-                    }}
                     className={`group relative isolate min-h-11 shrink-0 overflow-hidden px-4 py-2 text-sm font-semibold tracking-[0.01em] backdrop-blur-xl transition-all hover:-translate-y-[1px] hover:scale-[1.02] hover:border-sky-300/60 hover:text-white hover:shadow-[0_0_0_1px_rgba(125,211,252,0.34)_inset,0_16px_34px_rgba(2,6,23,0.5)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70 focus-visible:ring-offset-0 active:translate-y-0 active:scale-[0.99] ${SURFACE_PILL_BUTTON}`}
                     style={{
                       ...buttonStyle,
@@ -1082,101 +960,8 @@ export function GlobeExperience() {
                         backgroundImage: `radial-gradient(circle at 20% 20%, ${nodeGlowColor} 0%, rgba(15, 23, 42, 0) 58%)`,
                       }}
                     />
-                    <span className="relative inline-flex items-center gap-2">
-                      {isExpandable ? (
-                        <span
-                          className="h-1.5 w-1.5 rounded-full transition-all duration-300"
-                          style={{
-                            backgroundColor: isMenuOpen ? "rgba(224, 242, 254, 0.96)" : "rgba(148, 163, 184, 0.8)",
-                            boxShadow: isMenuOpen
-                              ? `0 0 0 3px ${colorToRgba(ACCENT_COLOR_HEX, 0.24)}, 0 0 14px ${nodeGlowColor}`
-                              : "none",
-                          }}
-                        />
-                      ) : null}
-                      <span>{node.title}</span>
-                      {isExpandable ? (
-                        <svg
-                          aria-hidden
-                          viewBox="0 0 20 20"
-                          className={`h-3.5 w-3.5 transition-transform duration-300 ${
-                            isMenuOpen
-                              ? "translate-y-[1px] rotate-180 scale-110"
-                              : "translate-y-[1px] group-hover:translate-y-[2px]"
-                          }`}
-                        >
-                          <path
-                            d="M5 7.5l5 5 5-5"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="1.9"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          />
-                        </svg>
-                      ) : null}
-                    </span>
+                    <span className="relative inline-flex items-center gap-2">{node.title}</span>
                   </button>
-                  {node.id === "experience" ? (
-                    <AnimatePresence>
-                      {showExperienceHoverMenu ? (
-                        <motion.div
-                          className={`pointer-events-auto absolute left-1/2 top-full mt-2 w-[min(96vw,36rem)] -translate-x-1/2 overflow-y-auto p-4 md:w-[34rem] ${SURFACE_POPOVER}`}
-                          initial={{ opacity: 0, y: -8, x: 10 }}
-                          animate={{ opacity: 1, y: 0, x: 0 }}
-                          exit={{ opacity: 0, y: -6, x: 8 }}
-                          transition={{ duration: motionDuration.medium, ease: motionEase.smoothOut }}
-                        >
-                          <div className="mb-3 flex items-center justify-between px-1">
-                            <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-200">
-                              Experience nodes
-                            </div>
-                            <div className="rounded-full border border-white/20 bg-white/5 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.12em] text-slate-300">
-                              {experienceMiniNodes.length} total
-                            </div>
-                          </div>
-                          <div className="grid w-full grid-cols-2 gap-2.5 md:grid-cols-4">
-                            {experienceMiniNodes.map((miniNode) => {
-                              const isMiniActive = activeExperienceMiniNodeId === miniNode.id;
-                              return (
-                                <button
-                                  key={miniNode.id}
-                                  type="button"
-                                  onClick={() => onSelectExperienceMiniNode(miniNode.id)}
-                                  className="group relative overflow-hidden rounded-2xl border px-3 py-2.5 text-left text-xs font-semibold leading-snug shadow-[inset_0_1px_0_rgba(255,255,255,0.1)] transition-all duration-300 hover:-translate-y-0.5 hover:border-sky-300/60 hover:text-white hover:shadow-[0_0_0_1px_rgba(125,211,252,0.25)_inset,0_14px_28px_rgba(2,6,23,0.42)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70 md:text-[0.8rem]"
-                                  style={
-                                    isMiniActive
-                                      ? {
-                                          borderColor: colorToRgba(ACCENT_COLOR_HEX, 0.88),
-                                          backgroundImage: `linear-gradient(140deg, ${colorToRgba(ACCENT_COLOR_HEX, 0.3)} 0%, ${colorToRgba(ACCENT_COLOR_HEX, 0.16)} 55%, rgba(15, 23, 42, 0.94) 100%)`,
-                                          color: "rgb(240, 249, 255)",
-                                          boxShadow: `0 0 0 1px ${colorToRgba(ACCENT_COLOR_HEX, 0.35)} inset, 0 12px 30px ${colorToRgba(ACCENT_COLOR_HEX, 0.2)}`,
-                                        }
-                                      : {
-                                          borderColor: "rgba(148, 163, 184, 0.4)",
-                                          backgroundImage:
-                                            "linear-gradient(140deg, rgba(30, 41, 59, 0.82) 0%, rgba(15, 23, 42, 0.92) 100%)",
-                                          color: "rgb(226, 232, 240)",
-                                        }
-                                  }
-                                >
-                                  <span className="relative z-10">{miniNode.title}</span>
-                                  <span
-                                    aria-hidden
-                                    className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100"
-                                    style={{
-                                      backgroundImage:
-                                        "radial-gradient(circle at 20% 18%, rgba(56, 189, 248, 0.26) 0%, rgba(15, 23, 42, 0) 56%)",
-                                    }}
-                                  />
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </motion.div>
-                      ) : null}
-                    </AnimatePresence>
-                  ) : null}
                 </div>
               );
             })}
@@ -1205,9 +990,7 @@ export function GlobeExperience() {
       />
 
       <ResumePanel
-        node={
-          showPanel && (showMainResumePanel || showPanel.id === "projects") ? showPanel : null
-        }
+        node={showPanel}
         onClose={onClosePanel}
         onGoToNext={
           showPanel && panelNextNode ? () => onSelectNode(panelNextNode) : undefined
@@ -1228,13 +1011,8 @@ export function GlobeExperience() {
         projectNavPosition={projectNavPosition}
         projectBreadcrumb={projectBreadcrumb}
         contextRibbon={contextRibbon}
-        scrollToBulletIndex={pendingExperienceScrollIndex}
-        onDidScrollToBullet={() => setPendingExperienceScrollIndex(null)}
         onPanelAnchorChange={handleResumePanelAnchorChange}
       />
-      {activeMiniDetail && isExperienceSelected ? (
-        <MiniNodeDetailPanel detail={activeMiniDetail} onClose={onClosePanel} />
-      ) : null}
       <SceneLoader />
     </section>
   );
