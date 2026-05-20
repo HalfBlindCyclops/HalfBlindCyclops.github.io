@@ -49,6 +49,10 @@ function jitter(id: string, amount: number): number {
   return (idHash01(id) - 0.5) * 2 * amount;
 }
 
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
 type PlanePreset = {
   count: number;
   radius: number;
@@ -71,14 +75,14 @@ const UNIQUE_CONSTELLATION_PRESET: PlanePreset[] = [
     count: 4,
     radius: 2.04,
     speed: 0.0154,
-    inclinationDeg: 46,
+    inclinationDeg: 38,
     yawDeg: -112,
     phaseOffset: 0.14,
     layer: "core",
     eccentricityBase: 0.03,
     eccentricityJitter: 0.014,
     radiusJitter: 0.048,
-    inclinationJitter: 2.8,
+    inclinationJitter: 4.8,
     yawJitter: 2.6,
     phaseJitterDeg: 3.6,
   },
@@ -87,14 +91,14 @@ const UNIQUE_CONSTELLATION_PRESET: PlanePreset[] = [
     count: 4,
     radius: 2.2,
     speed: 0.0135,
-    inclinationDeg: 70,
+    inclinationDeg: 74,
     yawDeg: -28,
     phaseOffset: 0.72,
     layer: "core",
     eccentricityBase: 0.05,
     eccentricityJitter: 0.018,
     radiusJitter: 0.056,
-    inclinationJitter: 3.1,
+    inclinationJitter: 5.4,
     yawJitter: 2.8,
     phaseJitterDeg: 4.0,
   },
@@ -103,14 +107,14 @@ const UNIQUE_CONSTELLATION_PRESET: PlanePreset[] = [
     count: 3,
     radius: 2.34,
     speed: 0.0128,
-    inclinationDeg: 26,
+    inclinationDeg: 18,
     yawDeg: 58,
     phaseOffset: 1.48,
     layer: "outer",
     eccentricityBase: 0.07,
     eccentricityJitter: 0.022,
     radiusJitter: 0.066,
-    inclinationJitter: 3.4,
+    inclinationJitter: 5.8,
     yawJitter: 3.1,
     phaseJitterDeg: 4.8,
   },
@@ -119,14 +123,14 @@ const UNIQUE_CONSTELLATION_PRESET: PlanePreset[] = [
     count: 2,
     radius: 2.56,
     speed: 0.0112,
-    inclinationDeg: 84,
+    inclinationDeg: 88,
     yawDeg: 112,
     phaseOffset: 2.08,
     layer: "drifter",
     eccentricityBase: 0.11,
     eccentricityJitter: 0.038,
     radiusJitter: 0.082,
-    inclinationJitter: 4.2,
+    inclinationJitter: 7.2,
     yawJitter: 3.8,
     phaseJitterDeg: 5.3,
   },
@@ -172,7 +176,7 @@ function buildUniqueSatelliteSpecs(): SatelliteSpec[] {
       // Keep constellation structure, but offset each satellite's plane slightly
       // so they do not read like perfectly stacked coplanar rings.
       const slotBlend = plane.count <= 1 ? 0 : s / (plane.count - 1) - 0.5;
-      const microPlaneInclination = slotBlend * 4.6;
+      const microPlaneInclination = slotBlend * 8.2;
       const microPlaneYaw = slotBlend * 6.2;
       const layerAltitudeSpread =
         plane.layer === "drifter" ? 0.2 : plane.layer === "outer" ? 0.14 : plane.layer === "core" ? 0.1 : 0.08;
@@ -180,8 +184,8 @@ function buildUniqueSatelliteSpecs(): SatelliteSpec[] {
       const planeAltitudeBias = Math.sin((p + 1) * 2.13) * 0.05;
       const planeBlend = planeCount <= 1 ? 0 : p / (planeCount - 1) - 0.5;
       const majorPlaneYaw = planeBlend * planeYawSpanDeg;
-      const majorPlaneInclination = Math.sin((p + 1) * 1.37) * 4.6;
-      const nodalInclination = jitter(`${id}-nodal-inc`, 1.7);
+      const majorPlaneInclination = Math.sin((p + 1) * 1.37) * 7.8;
+      const nodalInclination = jitter(`${id}-nodal-inc`, 4.6);
       const nodalYaw = jitter(`${id}-nodal-yaw`, 2.8);
       const eccentricityDrift =
         plane.layer === "drifter" ? jitter(`${id}-ecc-drift`, 0.02) : jitter(`${id}-ecc-drift`, 0.012);
@@ -218,6 +222,29 @@ function buildUniqueSatelliteSpecs(): SatelliteSpec[] {
       });
     }
   });
+
+  // Ensure a clear inclination spread: every satellite is at least 10deg apart.
+  const MIN_INCLINATION_GAP_DEG = 10;
+  const MIN_INCLINATION_DEG = 4;
+  const MAX_INCLINATION_DEG = 176;
+  const sorted = specs
+    .map((spec, index) => ({ index, inclinationDeg: spec.inclinationDeg }))
+    .sort((a, b) => a.inclinationDeg - b.inclinationDeg);
+  const maxSatelliteCount =
+    Math.floor((MAX_INCLINATION_DEG - MIN_INCLINATION_DEG) / MIN_INCLINATION_GAP_DEG) + 1;
+  if (sorted.length <= maxSatelliteCount) {
+    const assigned: number[] = [];
+    for (let i = 0; i < sorted.length; i += 1) {
+      const lowerBound = MIN_INCLINATION_DEG + i * MIN_INCLINATION_GAP_DEG;
+      const upperBound = MAX_INCLINATION_DEG - (sorted.length - 1 - i) * MIN_INCLINATION_GAP_DEG;
+      const prev = assigned[i - 1];
+      const lower = prev === undefined ? lowerBound : Math.max(lowerBound, prev + MIN_INCLINATION_GAP_DEG);
+      assigned[i] = clamp(sorted[i].inclinationDeg, lower, upperBound);
+    }
+    sorted.forEach((entry, i) => {
+      specs[entry.index].inclinationDeg = assigned[i];
+    });
+  }
 
   return specs;
 }
@@ -312,6 +339,7 @@ const SIGNAL_ARC_LIFT = 0.16;
 const SIGNAL_CLEARANCE_RADIUS = 1.08;
 const SATELLITE_SPEED_SCALE = 1 / 6;
 const PLANET_BLOCK_RADIUS = 1.03;
+const GROUND_LINK_BLOCK_RADIUS = 0.995;
 const ARC_REBUILD_INTERVAL_ACTIVE_SEC = 1 / 30;
 const ARC_REBUILD_INTERVAL_IDLE_SEC = 1 / 12;
 const ARC_REBUILD_EPSILON_SQ = 0.00002;
@@ -354,14 +382,20 @@ const MICROWAVE_WAVE_AMP_REDUCED = 0.0024;
 const MICROWAVE_ACTIVE_LINK_BOOST = 2.45;
 // Orbit-track rendering is split into this many segments for per-segment fading.
 const ORBIT_SEGMENT_COUNT = 96;
-// Keep orbit trails consistently visible in a light cyan.
-const ORBIT_UNIFORM_OPACITY = 0.26;
+// Keep active connection orbits readable while dimming inactive satellites.
+const ORBIT_ACTIVE_OPACITY = 0.38;
+const ORBIT_INACTIVE_OPACITY = 0.32;
+const ORBIT_ACTIVE_LINE_WIDTH = 0.8;
+const ORBIT_INACTIVE_LINE_WIDTH = 0.18;
 const NETWORK_SOLVE_INTERVAL_SEC = 0.32;
 const NETWORK_SOLVE_INTERVAL_LOW_QUALITY_SEC = 0.48;
 const EDGE_PROMOTE_SCORE = 0.7;
 const EDGE_DEMOTE_SCORE = 0.47;
 const EDGE_TTL_SEC = 1.35;
 const BACKBONE_DEGREE_LIMIT = 4;
+const INTER_SAT_FULL_STATIC_SEC = 3;
+const INTER_SAT_STATIC_FADE_SEC = 2;
+const INTER_SAT_STATIC_FLOOR = 0.08;
 
 function clamp01(t: number) {
   return Math.max(0, Math.min(1, t));
@@ -780,6 +814,8 @@ function SignalLine({
   const previousEndRef = useRef(new Vector3());
   const previousArcValidRef = useRef(false);
   const arcRebuildAccumRef = useRef(0);
+  const linkActiveSinceRef = useRef<number | null>(null);
+  const wasLinkSelectedRef = useRef(false);
 
   useFrame((state, delta) => {
     const { clock, camera } = state;
@@ -787,6 +823,26 @@ function SignalLine({
     const linkSelected = !linkKey || !activeLinkKeysRef || activeLinkKeysRef.current.has(linkKey);
     const noiseSelected =
       !linkKey || !activeNoiseLinkKeysRef || activeNoiseLinkKeysRef.current.has(linkKey);
+    const interSatDynamicStatic = orbitStyle && microwaveStyle;
+    if (interSatDynamicStatic) {
+      const becameActive = linkSelected && !wasLinkSelectedRef.current;
+      const becameInactive = !linkSelected && wasLinkSelectedRef.current;
+      if (becameActive || (linkSelected && linkActiveSinceRef.current === null)) {
+        linkActiveSinceRef.current = t;
+      } else if (becameInactive) {
+        linkActiveSinceRef.current = null;
+      }
+    }
+    wasLinkSelectedRef.current = linkSelected;
+    let staticStrength = 1;
+    if (interSatDynamicStatic && linkActiveSinceRef.current !== null) {
+      const elapsed = Math.max(0, t - linkActiveSinceRef.current);
+      if (elapsed > INTER_SAT_FULL_STATIC_SEC) {
+        const fadeT = clamp01((elapsed - INTER_SAT_FULL_STATIC_SEC) / INTER_SAT_STATIC_FADE_SEC);
+        const eased = 1 - Math.pow(1 - fadeT, 2);
+        staticStrength = 1 + (INTER_SAT_STATIC_FLOOR - 1) * eased;
+      }
+    }
     startTmpRef.current.copy(startRef.current);
     endTmpRef.current.copy(endRef.current);
     arcRebuildAccumRef.current += delta;
@@ -869,9 +925,11 @@ function SignalLine({
       const tangent = tmpTangentRef.current.copy(next).sub(prev).normalize();
       const normal = tmpNormalRef.current.copy(base).normalize();
       if (normal.lengthSq() < 1e-6) normal.set(0, 1, 0);
-      // Inter-satellite links read better with very tight microwave ripples.
+      // Inter-satellite links: full static on open, then fade to subtle noise.
       const microwaveAmpBase = reducedMotion ? MICROWAVE_WAVE_AMP_REDUCED : MICROWAVE_WAVE_AMP;
-      const microwaveAmp = noiseSelected ? microwaveAmpBase * MICROWAVE_ACTIVE_LINK_BOOST : 0;
+      const microwaveAmp = noiseSelected
+        ? microwaveAmpBase * MICROWAVE_ACTIVE_LINK_BOOST * (interSatDynamicStatic ? staticStrength : 1)
+        : 0;
       const microwaveWave =
         Math.sin(2 * Math.PI * MICROWAVE_WAVE_CYCLES * s - timePhase * MICROWAVE_WAVE_SPEED + phase) *
         microwaveAmp;
@@ -916,13 +974,18 @@ function SignalLine({
               ? 0.82
               : signalOpacity;
       signalLineRef.current.material.opacity = lineVisible ? baseOpacity + flicker : 0;
-      if (!orbitStyle && !solid) {
+      if (orbitStyle && !solid) {
+        signalLineRef.current.material.linewidth = linkSelected ? orbitLineWidth : 0;
+      } else if (!solid) {
         signalLineRef.current.material.linewidth = linkSelected ? signalLineWidth : idleLineWidth;
       }
     }
     if (rfLineRef.current?.material) {
+      const rfVisibilityScale = interSatDynamicStatic ? staticStrength : 1;
       rfLineRef.current.material.opacity =
-        lineVisible && linkSelected ? (solid || (orbitStyle && !microwaveStyle) ? 0 : rfOpacity) : 0;
+        lineVisible && linkSelected
+          ? (solid || (orbitStyle && !microwaveStyle) ? 0 : rfOpacity) * rfVisibilityScale
+          : 0;
       if (!orbitStyle && !solid) {
         rfLineRef.current.material.linewidth = linkSelected ? rfLineWidth : idleLineWidth;
       }
@@ -1058,10 +1121,9 @@ export function OrbitalSatellites({
     [satelliteLinks],
   );
   const accent = useMemo(() => new Color().setStyle(accentColor), [accentColor]);
-  const signalColor = useMemo(
-    () => accent.clone().lerp(new Color("white"), 0.14),
-    [accent],
-  );
+  const signalColor = useMemo(() => new Color("#38bdf8"), []);
+  const orbitTrackColor = useMemo(() => new Color("#38bdf8"), []);
+  const inactiveOrbitTrackColor = useMemo(() => orbitTrackColor.clone(), [orbitTrackColor]);
   const lowQualityTier = useMemo(() => {
     if (reducedMotion || isMobile) return true;
     if (typeof navigator === "undefined") return false;
@@ -1074,7 +1136,8 @@ export function OrbitalSatellites({
     const map = new Map<string, MutableRefObject<Vector3>>();
     for (const node of resumeNodes) {
       if (node.id === "about" || node.id === "experience" || node.id === "projects") {
-        map.set(`main:${node.id}`, { current: latLonToVector3(node.latitude, node.longitude, 1.002) });
+        // Match the visible uplink emitter top so sat links attach to the pin head, not ground contact.
+        map.set(`main:${node.id}`, { current: latLonToVector3(node.latitude, node.longitude, 1.0623) });
       }
     }
     return map;
@@ -1201,7 +1264,7 @@ export function OrbitalSatellites({
         const candidates = satelliteSpecs
           .map((spec, satIndex) => {
         const satPos = satPositionRefs[satIndex].current;
-            const clear = segmentClearsPlanet(targetRef.current, satPos, PLANET_BLOCK_RADIUS);
+            const clear = segmentClearsPlanet(targetRef.current, satPos, GROUND_LINK_BLOCK_RADIUS);
         const distance = targetRef.current.distanceTo(satPos);
         const altitudeBias = Math.max(0, satPos.length() - 1);
             const stickiness = previousGateway === satIndex ? 0.12 : 0;
@@ -1337,6 +1400,21 @@ export function OrbitalSatellites({
       const activeSatPairKeys = new Set<string>();
       const adjacency = buildSatAdjacency(repairBackbone, linksById, satelliteSpecs.length);
       const gatewayArray = Array.from(gatewaySatIndices);
+      const groundAssignedSatArray = Array.from(
+        new Set(anchorAssignments.map((assignment) => assignment.satIndex)),
+      );
+      for (let i = 0; i < groundAssignedSatArray.length; i += 1) {
+        for (let j = i + 1; j < groundAssignedSatArray.length; j += 1) {
+          const pathEdges = shortestSatPathEdgeIds(
+            groundAssignedSatArray[i],
+            groundAssignedSatArray[j],
+            adjacency,
+            linksById,
+            satPositionRefs,
+          );
+          pathEdges.forEach((edgeId) => activeSatPairKeys.add(edgeId));
+        }
+      }
       for (let i = 0; i < gatewayArray.length; i += 1) {
         for (let j = i + 1; j < gatewayArray.length; j += 1) {
           const pathEdges = shortestSatPathEdgeIds(
@@ -1361,10 +1439,10 @@ export function OrbitalSatellites({
         fallback.forEach((edgeId) => activeSatPairKeys.add(edgeId));
       }
       if (activeSatPairKeys.size === 0) {
-        const visibleFallback = sortedLinks.find(
+        const visibleFallbacks = sortedLinks.filter(
           ({ link, clear }) => clear && link.kind === "backbone",
         );
-        if (visibleFallback) activeSatPairKeys.add(visibleFallback.link.id);
+        visibleFallbacks.slice(0, 3).forEach(({ link }) => activeSatPairKeys.add(link.id));
       }
 
       const activeSatIndices = new Set<number>();
@@ -1430,11 +1508,17 @@ export function OrbitalSatellites({
     }
 
     orbitSegmentLineRefs.current.forEach((segmentLines, satIndex) => {
-      void satIndex;
+      const isActiveSat = activeSatIndicesRef.current.has(satIndex);
+      const orbitOpacity = isActiveSat ? ORBIT_ACTIVE_OPACITY : ORBIT_INACTIVE_OPACITY;
       segmentLines.forEach((orbitLine, segmentIndex) => {
         void segmentIndex;
         if (!orbitLine?.material) return;
-        orbitLine.material.opacity = ORBIT_UNIFORM_OPACITY;
+        orbitLine.material.opacity = orbitOpacity;
+        orbitLine.material.linewidth = isActiveSat ? ORBIT_ACTIVE_LINE_WIDTH : ORBIT_INACTIVE_LINE_WIDTH;
+        const materialWithColor = orbitLine.material as { color?: Color };
+        if (materialWithColor.color) {
+          materialWithColor.color.copy(isActiveSat ? orbitTrackColor : inactiveOrbitTrackColor);
+        }
       });
     });
   });
@@ -1450,11 +1534,11 @@ export function OrbitalSatellites({
                 node as unknown as LineLikeObject | null;
             }}
             points={segmentPoints}
-            color={signalColor}
+            color={orbitTrackColor}
             toneMapped={false}
             transparent
-            opacity={ORBIT_UNIFORM_OPACITY}
-            lineWidth={0.8}
+            opacity={ORBIT_INACTIVE_OPACITY}
+            lineWidth={ORBIT_ACTIVE_LINE_WIDTH}
             depthTest
           />
         )),

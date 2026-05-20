@@ -25,6 +25,9 @@ const TARGET_LERP_SPEED_REDUCED = 2.4;
 /** Split-view projection offset blend when closing panel to one-cam view (lower = slower). */
 const VIEW_OFFSET_BLEND_SPEED = 3.1;
 const VIEW_OFFSET_BLEND_SPEED_REDUCED = 5;
+const FOCUS_TILT_DEG = 30;
+const WORLD_UP = new Vector3(0, 1, 0);
+const WORLD_RIGHT = new Vector3(1, 0, 0);
 
 type SceneMode = "idle" | "focusing" | "focused" | "returning";
 
@@ -51,12 +54,21 @@ function setFramingForLatLon(
   cameraPosition: Vector3,
   scratchFocus: Vector3,
   scratchDir: Vector3,
+  scratchTiltAxis: Vector3,
+  scratchTiltedDir: Vector3,
 ) {
   scratchFocus.copy(latLonToSceneWorld(lat, lon, 1.03));
   orbitTarget.copy(scratchFocus).addScaledVector(scratchFocus, isMobile ? 0.02 : 0.03);
   scratchDir.copy(scratchFocus).normalize();
+  // Focus views should not be straight overhead: tilt the camera ~30deg off the surface normal.
+  scratchTiltAxis.crossVectors(scratchDir, WORLD_UP);
+  if (scratchTiltAxis.lengthSq() < 1e-10) {
+    scratchTiltAxis.crossVectors(scratchDir, WORLD_RIGHT);
+  }
+  scratchTiltAxis.normalize();
+  scratchTiltedDir.copy(scratchDir).applyAxisAngle(scratchTiltAxis, (-FOCUS_TILT_DEG * Math.PI) / 180);
   const distance = isMobile ? 2.38 : 2.94;
-  cameraPosition.copy(scratchDir).multiplyScalar(distance);
+  cameraPosition.copy(scratchTiltedDir).multiplyScalar(distance);
   cameraPosition.y += isMobile ? 0.24 : 0.3;
   // Positive camera X nudges the globe left on screen.
   cameraPosition.x += isMobile ? 0.12 : 0.24;
@@ -109,6 +121,8 @@ export function CameraRig({
   const clampAxis = useRef(new Vector3());
   const wiggleDirSmoothedRef = useRef(new Vector3());
   const wiggleClampedDirRef = useRef(new Vector3());
+  const focusTiltAxisRef = useRef(new Vector3());
+  const focusTiltedDirRef = useRef(new Vector3());
   const viewOffsetWeightRef = useRef(0);
   const lastViewOffsetPxRef = useRef<number | null>(null);
 
@@ -169,7 +183,17 @@ export function CameraRig({
     let desiredPosition: Vector3;
 
     if (shouldFocus) {
-      setFramingForLatLon(latitude, longitude, isMobile, t, dfp, ft, td);
+      setFramingForLatLon(
+        latitude,
+        longitude,
+        isMobile,
+        t,
+        dfp,
+        ft,
+        td,
+        focusTiltAxisRef.current,
+        focusTiltedDirRef.current,
+      );
       // Show more context around the selected node by pulling camera slightly back.
       dfp.addScaledVector(td, isMobile ? 0.48 : 0.82);
       desiredPosition = dfp;

@@ -59,7 +59,7 @@ export const resumeNodes: ResumeNode[] = [
     markerStyle: "uplinkPad",
     bullets: [
       "Center for Inclusive Computing — Research Assistant (Jan 2026 – Present), Boston: CS research via curriculum analysis and data visualization; redesigning internal web assets for findings and institutional tracking.",
-      "Startup — Consultant (Nov 2024 – Apr 2025), Boston: strategic support through acquisition; technical and process alignment for integration with the parent company.",
+      "Startup — Consultant (Nov 2024 – Apr 2025), Boston: strategic support through acquisition; technical and process alignment for integration with the parent company on AI descriptor tech.",
       "Boston Globe Media — IT Analyst (Jan 2024 – Sep 2024), Boston: remote management for weather modeling systems; AI-driven workflow automation for operations; executive support and enterprise tooling across Active Directory, Jamf, Sophos, and Jira.",
       "Vita Needle Co. — Precision Manufacturing Technician (Apr 2023 – Sep 2023), Newton: micrometer-scale parts, inventory and machining; high-priority tracking for $500K+ orders.",
       "**Boston’s Best Chimney** — Mason Assistant (Jun 2022 – Sep 2022).",
