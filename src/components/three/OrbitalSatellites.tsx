@@ -69,17 +69,17 @@ const UNIQUE_CONSTELLATION_PRESET: PlanePreset[] = [
   // Primary mid-inclination backbone plane.
   {
     count: 4,
-    radius: 2.08,
+    radius: 2.04,
     speed: 0.0154,
     inclinationDeg: 46,
     yawDeg: -112,
     phaseOffset: 0.14,
     layer: "core",
-    eccentricityBase: 0.022,
-    eccentricityJitter: 0.01,
-    radiusJitter: 0.022,
-    inclinationJitter: 1.9,
-    yawJitter: 1.7,
+    eccentricityBase: 0.03,
+    eccentricityJitter: 0.014,
+    radiusJitter: 0.048,
+    inclinationJitter: 2.8,
+    yawJitter: 2.6,
     phaseJitterDeg: 3.6,
   },
   // Secondary high-inclination plane for strong angle contrast.
@@ -91,43 +91,43 @@ const UNIQUE_CONSTELLATION_PRESET: PlanePreset[] = [
     yawDeg: -28,
     phaseOffset: 0.72,
     layer: "core",
-    eccentricityBase: 0.038,
-    eccentricityJitter: 0.014,
-    radiusJitter: 0.024,
-    inclinationJitter: 2.1,
-    yawJitter: 1.9,
+    eccentricityBase: 0.05,
+    eccentricityJitter: 0.018,
+    radiusJitter: 0.056,
+    inclinationJitter: 3.1,
+    yawJitter: 2.8,
     phaseJitterDeg: 4.0,
   },
   // Low-inclination counter plane to prevent "all polar" feel.
   {
     count: 3,
-    radius: 2.26,
+    radius: 2.34,
     speed: 0.0128,
     inclinationDeg: 26,
     yawDeg: 58,
     phaseOffset: 1.48,
     layer: "outer",
-    eccentricityBase: 0.052,
-    eccentricityJitter: 0.018,
-    radiusJitter: 0.026,
-    inclinationJitter: 2.4,
-    yawJitter: 2.2,
+    eccentricityBase: 0.07,
+    eccentricityJitter: 0.022,
+    radiusJitter: 0.066,
+    inclinationJitter: 3.4,
+    yawJitter: 3.1,
     phaseJitterDeg: 4.8,
   },
   // Sparse relay/drifter plane for longer arcs and variety.
   {
     count: 2,
-    radius: 2.42,
+    radius: 2.56,
     speed: 0.0112,
     inclinationDeg: 84,
     yawDeg: 112,
     phaseOffset: 2.08,
     layer: "drifter",
-    eccentricityBase: 0.088,
-    eccentricityJitter: 0.03,
-    radiusJitter: 0.03,
-    inclinationJitter: 2.7,
-    yawJitter: 2.6,
+    eccentricityBase: 0.11,
+    eccentricityJitter: 0.038,
+    radiusJitter: 0.082,
+    inclinationJitter: 4.2,
+    yawJitter: 3.8,
     phaseJitterDeg: 5.3,
   },
 ];
@@ -174,6 +174,10 @@ function buildUniqueSatelliteSpecs(): SatelliteSpec[] {
       const slotBlend = plane.count <= 1 ? 0 : s / (plane.count - 1) - 0.5;
       const microPlaneInclination = slotBlend * 4.6;
       const microPlaneYaw = slotBlend * 6.2;
+      const layerAltitudeSpread =
+        plane.layer === "drifter" ? 0.2 : plane.layer === "outer" ? 0.14 : plane.layer === "core" ? 0.1 : 0.08;
+      const slotAltitudeOffset = slotBlend * layerAltitudeSpread;
+      const planeAltitudeBias = Math.sin((p + 1) * 2.13) * 0.05;
       const planeBlend = planeCount <= 1 ? 0 : p / (planeCount - 1) - 0.5;
       const majorPlaneYaw = planeBlend * planeYawSpanDeg;
       const majorPlaneInclination = Math.sin((p + 1) * 1.37) * 4.6;
@@ -184,7 +188,7 @@ function buildUniqueSatelliteSpecs(): SatelliteSpec[] {
       const phaseDrift = ((jitter(`${id}-phase-drift`, 1) * Math.PI) / 180) * 1.2;
       specs.push({
         id,
-        radius: plane.radius + jitter(`${id}-r`, plane.radiusJitter),
+        radius: plane.radius + planeAltitudeBias + slotAltitudeOffset + jitter(`${id}-r`, plane.radiusJitter),
         speed: plane.speed + jitter(`${id}-speed`, plane.layer === "drifter" ? 0.0009 : 0.0006),
         phase:
           phaseAngles[s] +
@@ -350,14 +354,8 @@ const MICROWAVE_WAVE_AMP_REDUCED = 0.0024;
 const MICROWAVE_ACTIVE_LINK_BOOST = 2.45;
 // Orbit-track rendering is split into this many segments for per-segment fading.
 const ORBIT_SEGMENT_COUNT = 96;
-// Higher values shorten the bright "recently traveled" trail.
-const ORBIT_TRAIL_DECAY = 2.7;
-// Active satellite orbit brightness floor + additive trail peak.
-const ORBIT_ACTIVE_BASE_OPACITY = 0.28;
-const ORBIT_ACTIVE_TRAIL_GAIN = 0.34;
-// Inactive satellite orbit brightness floor + additive trail peak.
-const ORBIT_INACTIVE_BASE_OPACITY = 0;
-const ORBIT_INACTIVE_TRAIL_GAIN = 0;
+// Keep orbit trails consistently visible in a light cyan.
+const ORBIT_UNIFORM_OPACITY = 0.26;
 const NETWORK_SOLVE_INTERVAL_SEC = 0.32;
 const NETWORK_SOLVE_INTERVAL_LOW_QUALITY_SEC = 0.48;
 const EDGE_PROMOTE_SCORE = 0.7;
@@ -979,6 +977,7 @@ function SignalLine({
         <Line
           points={INITIAL_LINE_POINTS}
           color={signalColor}
+          toneMapped={false}
           transparent
           opacity={0.3}
           lineWidth={3.8}
@@ -992,6 +991,7 @@ function SignalLine({
         }}
         points={INITIAL_LINE_POINTS}
         color={signalColor}
+        toneMapped={false}
         transparent
         opacity={0}
         lineWidth={solid || orbitStyle ? 0 : rfLineWidth}
@@ -1004,6 +1004,7 @@ function SignalLine({
         }}
         points={INITIAL_LINE_POINTS}
         color={signalColor}
+        toneMapped={false}
         transparent
         opacity={orbitStyle ? 0.22 : solid ? 1 : signalOpacity}
         lineWidth={orbitStyle ? orbitLineWidth : solid ? 2.45 : signalLineWidth}
@@ -1247,6 +1248,24 @@ export function OrbitalSatellites({
         });
         coveredNow.forEach((anchorKey) => uncovered.delete(anchorKey));
       }
+      // Avoid a degenerate single-gateway topology: keep at least two gateways when possible
+      // so an inter-satellite path is visible while still staying sparse.
+      if (gatewaySatIndices.size < 2 && anchorCandidates.length > 1) {
+        const primaryGateway = Array.from(gatewaySatIndices)[0] ?? -1;
+        let backupGateway = -1;
+        let backupScore = Number.NEGATIVE_INFINITY;
+        anchorCandidates.forEach(({ candidates }) => {
+          const alt = candidates.find(
+            (candidate) => candidate.clear && candidate.satIndex !== primaryGateway,
+          );
+          if (!alt) return;
+          if (alt.scoreAny > backupScore) {
+            backupScore = alt.scoreAny;
+            backupGateway = alt.satIndex;
+          }
+        });
+        if (backupGateway >= 0) gatewaySatIndices.add(backupGateway);
+      }
       // Guarantee assignment for every anchor, but prefer the minimal selected gateway set.
       anchorCandidates.forEach(({ anchorKey, candidates }) => {
         const chosenFromSelected = candidates
@@ -1341,6 +1360,12 @@ export function OrbitalSatellites({
         );
         fallback.forEach((edgeId) => activeSatPairKeys.add(edgeId));
       }
+      if (activeSatPairKeys.size === 0) {
+        const visibleFallback = sortedLinks.find(
+          ({ link, clear }) => clear && link.kind === "backbone",
+        );
+        if (visibleFallback) activeSatPairKeys.add(visibleFallback.link.id);
+      }
 
       const activeSatIndices = new Set<number>();
       activeSatPairKeys.forEach((edgeId) => {
@@ -1404,18 +1429,12 @@ export function OrbitalSatellites({
     activePathNoiseLinkKeysRef.current = noisyEdgeKeys;
     }
 
-    const segmentAngle = tau / ORBIT_SEGMENT_COUNT;
     orbitSegmentLineRefs.current.forEach((segmentLines, satIndex) => {
-      const isActiveSat = activeSatIndicesRef.current.has(satIndex);
-      const thetaNow = satThetaRef.current[satIndex] ?? 0;
-      const baseOpacity = isActiveSat ? ORBIT_ACTIVE_BASE_OPACITY : ORBIT_INACTIVE_BASE_OPACITY;
-      const trailGain = isActiveSat ? ORBIT_ACTIVE_TRAIL_GAIN : ORBIT_INACTIVE_TRAIL_GAIN;
+      void satIndex;
       segmentLines.forEach((orbitLine, segmentIndex) => {
+        void segmentIndex;
         if (!orbitLine?.material) return;
-        const segmentCenterTheta = (segmentIndex + 0.5) * segmentAngle;
-        const behindDistance = (thetaNow - segmentCenterTheta + tau) % tau;
-        const trailStrength = Math.exp(-behindDistance * ORBIT_TRAIL_DECAY);
-        orbitLine.material.opacity = baseOpacity + trailGain * trailStrength;
+        orbitLine.material.opacity = ORBIT_UNIFORM_OPACITY;
       });
     });
   });
@@ -1432,8 +1451,9 @@ export function OrbitalSatellites({
             }}
             points={segmentPoints}
             color={signalColor}
+            toneMapped={false}
             transparent
-            opacity={ORBIT_INACTIVE_BASE_OPACITY}
+            opacity={ORBIT_UNIFORM_OPACITY}
             lineWidth={0.8}
             depthTest
           />
@@ -1467,6 +1487,7 @@ export function OrbitalSatellites({
           }}
           points={INITIAL_LINE_POINTS}
           color={signalColor}
+          toneMapped={false}
           transparent
           opacity={0.14}
           lineWidth={0.34}
@@ -1516,13 +1537,14 @@ export function OrbitalSatellites({
           orbitStyle
           microwaveStyle
           orbitLineWidth={1.35}
-          signalOpacity={0.58}
+          signalOpacity={0.26}
           rfOpacity={0.85}
           linkKey={pair.id}
           activeLinkKeysRef={activeSatPairKeysRef}
           activeNoiseLinkKeysRef={activePathNoiseLinkKeysRef}
           idleOpacity={0}
           idleLineWidth={0}
+          requireClearPath
           lowQuality={lowQualityTier}
         />
       ))}
