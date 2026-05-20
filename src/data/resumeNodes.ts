@@ -53,7 +53,7 @@ export const resumeNodes: ResumeNode[] = [
     title: "Experience",
     subtitle: "",
     /** Globe pin: Europe-centered cluster anchor for the Experience node set. */
-    latitude: 51.5072,
+    latitude: 61.5072,
     longitude: -0.1276,
     color: "#38bdf8",
     markerStyle: "uplinkPad",
