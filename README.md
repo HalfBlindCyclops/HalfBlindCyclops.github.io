@@ -1,36 +1,44 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Globesite
 
-## Getting Started
+Interactive 3D resume and portfolio experience built with Next.js, React, and React Three Fiber.
 
-First, run the development server:
+## Documentation
+
+- **Primary reference (consolidated):** `docs/CODEBASE.md`
+- **Deployment runbook:** `DEPLOY.md`
+- **Performance baseline procedure:** `scripts/perf-baseline-checklist.md`
+
+## Quick Start
 
 ```bash
+npm ci
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open `http://localhost:3000`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+For GitHub Pages-style local routing, run:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+NEXT_PUBLIC_BASE_PATH=/globesite npm run dev
+```
 
-## Learn More
+Then open `http://localhost:3000/globesite/`.
 
-To learn more about Next.js, take a look at the following resources:
+## Scripts
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- `npm run dev`: Start development server.
+- `npm run build`: Static export build (`next build` with `output: "export"`).
+- `npm run export`: Alias of `build`.
+- `npm run start`: Start production server mode (not used for static hosting).
+- `npm run lint`: Run ESLint.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Tech Stack
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- Next.js 16 (App Router, static export)
+- React 19
+- `@react-three/fiber` + `@react-three/drei`
+- Three.js
+- Framer Motion
+- TypeScript
+- Tailwind CSS v4

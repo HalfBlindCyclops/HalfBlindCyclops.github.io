@@ -1,7 +1,7 @@
 /**
- * Global site accent — cyan-leaning (G≈B, cool) for pins, signal lines, nav, panels.
+ * Global site accent — bright cyan for strong signal-line visibility.
  */
-export const ACCENT_COLOR_HEX = "#28c4d8";
+export const ACCENT_COLOR_HEX = "#22d3ee";
 
 /** Parse hex / rgb() / rgba() into CSS rgba(). */
 export function colorToRgba(color: string, alpha: number): string {
@@ -36,6 +36,6 @@ export function colorToRgba(color: string, alpha: number): string {
       return `rgba(${m[1]},${m[2]},${m[3]},${a})`;
   }
 
-  const { r, g, b } = { r: 40, g: 196, b: 216 }; // ACCENT_COLOR_HEX
+  const { r, g, b } = { r: 34, g: 211, b: 238 }; // ACCENT_COLOR_HEX
   return `rgba(${r},${g},${b},${a})`;
 }

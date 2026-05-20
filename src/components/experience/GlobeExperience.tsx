@@ -1,6 +1,14 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import {
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import dynamic from "next/dynamic";
 import {
   ACESFilmicToneMapping,
@@ -21,8 +29,6 @@ import { GlobeWeather } from "@/components/three/GlobeWeather";
 import { SpaceBackground } from "@/components/three/SpaceBackground";
 import { RuntimePerfMonitor } from "@/components/diagnostics/RuntimePerfMonitor";
 import {
-  CONNECTOR_CONNECT_SEC,
-  CONNECTOR_RETRACT_SEC,
   JUNCTION_X,
   ResumeConnector,
 } from "@/components/ui/ResumeConnector";
@@ -32,6 +38,13 @@ import { INITIAL_GLOBE_FOCUS, resumeNodes, type ResumeNode } from "@/data/resume
 import { ACCENT_COLOR_HEX, colorToRgba } from "@/lib/colorFormat";
 import { miniBulletParts } from "@/lib/projectBullet";
 import type { ResumePanelAnchor, ResumeProjectDetail } from "@/components/ui/ResumePanel";
+import { connectorMotion, motionDelayMs, motionDuration, motionEase } from "@/lib/motion";
+import {
+  SURFACE_INSET,
+  SURFACE_PILL_BUTTON,
+  SURFACE_POPOVER,
+  SURFACE_SHELL_LIGHT,
+} from "@/lib/uiSurfaces";
 import {
   getFrameOverlaySnapshot,
   setConnectorAnchor as setConnectorAnchorStore,
@@ -69,6 +82,13 @@ type MiniDetailInfo = {
     href: string;
   }>;
 };
+
+const PROJECT_SUBSECTION_LABELS = {
+  webDev: "Web dev",
+  systems: "Systems",
+  security: "Security",
+  others: "Other",
+} as const;
 
 const CONNECTOR_ANCHOR_HIDDEN_KEY = "__hidden__";
 const ProfileContactHub = dynamic(
@@ -284,15 +304,6 @@ function CursorLatLonTracker({
   return null;
 }
 
-const PROJECT_TRAY_GROUPS: {
-  key: "webDev" | "systems" | "security";
-  label: string;
-}[] = [
-  { key: "webDev", label: "Web dev" },
-  { key: "systems", label: "Systems" },
-  { key: "security", label: "Security" },
-];
-
 function MiniNodeDetailPanel({
   detail,
   onClose,
@@ -303,11 +314,11 @@ function MiniNodeDetailPanel({
   return (
     <AnimatePresence>
       <motion.aside
-        className="pointer-events-auto absolute left-1/2 top-[max(5.5rem,8dvh)] z-50 w-[min(92vw,34rem)] -translate-x-1/2 rounded-2xl border border-white/20 bg-white/10 p-6 text-slate-100 shadow-2xl backdrop-blur-xl md:left-auto md:right-[2.75rem] md:top-[max(7rem,11dvh)] md:w-[34rem] md:translate-x-0 md:p-8"
+        className={`pointer-events-auto absolute left-1/2 top-[max(5.5rem,8dvh)] z-50 w-[min(92vw,34rem)] -translate-x-1/2 p-[var(--surface-pad-md)] text-slate-100 md:left-auto md:right-[2.75rem] md:top-[max(7rem,11dvh)] md:w-[34rem] md:translate-x-0 md:p-[var(--surface-pad-lg)] ${SURFACE_SHELL_LIGHT}`}
         initial={{ opacity: 0, y: 16, scale: 0.98 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: 12, scale: 0.98 }}
-        transition={{ duration: 0.28, ease: "easeOut" }}
+        transition={{ duration: motionDuration.slow, ease: motionEase.smoothOut }}
       >
         <div className="mb-5 flex items-start justify-between gap-4">
           <div className="min-w-0 flex-1">
@@ -322,7 +333,7 @@ function MiniNodeDetailPanel({
             type="button"
             aria-label="Close detail"
             onClick={onClose}
-            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-white/25 bg-white/10 text-lg leading-none text-slate-100 transition hover:bg-white/20"
+            className={`inline-flex h-11 w-11 shrink-0 items-center justify-center text-lg leading-none text-slate-100 ${SURFACE_PILL_BUTTON}`}
           >
             ×
           </button>
@@ -345,7 +356,7 @@ function MiniNodeDetailPanel({
             </div>
           ) : null}
           {detail.highlights && detail.highlights.length > 0 ? (
-            <div className="space-y-2 rounded-xl border border-white/15 bg-slate-900/30 p-3.5">
+            <div className={`space-y-2 p-4 ${SURFACE_INSET}`}>
               <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-300">
                 Highlights
               </p>
@@ -360,7 +371,7 @@ function MiniNodeDetailPanel({
             </div>
           ) : null}
           {detail.impact || detail.status ? (
-            <div className="grid gap-2 rounded-xl border border-white/15 bg-slate-900/30 p-3.5 text-sm text-slate-200">
+            <div className={`grid gap-2 p-4 text-sm text-slate-200 ${SURFACE_INSET}`}>
               {detail.status ? (
                 <p>
                   <span className="font-semibold text-white">Status:</span> {detail.status}
@@ -446,7 +457,7 @@ function ConnectorOverlay({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          transition={{ duration: 0.25 }}
+          transition={{ duration: motionDuration.medium, ease: motionEase.smoothOut }}
         >
           <AnimatePresence>
             {showConnectorLine && connector.visible && (
@@ -475,8 +486,10 @@ function ConnectorOverlay({
             animate={{ scaleX: showConnectorLine ? 1 : 0, opacity: showConnectorLine ? 1 : 0 }}
             exit={{ scaleX: 0, opacity: 0 }}
             transition={{
-              duration: connectorPathsActive ? CONNECTOR_CONNECT_SEC : CONNECTOR_RETRACT_SEC,
-              ease: [0.22, 1, 0.36, 1],
+              duration: connectorPathsActive
+                ? connectorMotion.connect.duration
+                : connectorMotion.retract.duration,
+              ease: connectorPathsActive ? connectorMotion.connect.ease : connectorMotion.retract.ease,
             }}
           />
         </motion.div>
@@ -486,6 +499,7 @@ function ConnectorOverlay({
 }
 
 export function GlobeExperience() {
+  const PANEL_ANCHOR_EPSILON = 0.05;
   const [sunDirection, setSunDirection] = useState<[number, number, number]>(() =>
     sunDirectionForDate(new Date()),
   );
@@ -496,6 +510,20 @@ export function GlobeExperience() {
   const [pendingExperienceScrollIndex, setPendingExperienceScrollIndex] = useState<number | null>(null);
   const [sceneMode, setSceneMode] = useState<SceneMode>("idle");
   const [resumePanelAnchor, setResumePanelAnchor] = useState<ResumePanelAnchor | null>(null);
+  const handleResumePanelAnchorChange = useCallback((next: ResumePanelAnchor | null) => {
+    setResumePanelAnchor((prev) => {
+      if (prev === null && next === null) return prev;
+      if (prev === null || next === null) return next;
+      if (
+        Math.abs(prev.leftPct - next.leftPct) < PANEL_ANCHOR_EPSILON &&
+        Math.abs(prev.topPct - next.topPct) < PANEL_ANCHOR_EPSILON
+      ) {
+        return prev;
+      }
+      return next;
+    });
+  }, []);
+
   const sectionRef = useRef<HTMLElement | null>(null);
   const [sectionHeight, setSectionHeight] = useState(900);
   const prefersReducedMotion = useReducedMotion();
@@ -573,8 +601,6 @@ export function GlobeExperience() {
     showPanel?.id === "experience" &&
     activeMiniDetail === null &&
     (isMobile || hoveredSectionId === "experience");
-  const showProjectsHoverMenu =
-    showPanel?.id === "projects" && (isMobile || hoveredSectionId === "projects");
   const showMainResumePanel = !(activeMiniDetail !== null && isExperienceSelected);
   const activeProjectDetail: ResumeProjectDetail | null = useMemo(() => {
     if (!isProjectsSelected || !activeProjectMiniNode || !activeMiniDetail) return null;
@@ -597,6 +623,34 @@ export function GlobeExperience() {
     activeProjectIndex >= 0
       ? { current: activeProjectIndex + 1, total: projectMiniNodes.length }
       : undefined;
+  const projectBreadcrumb = useMemo(() => {
+    if (!isProjectsSelected || !activeProjectMiniNode) return null;
+    const subsectionLabel = PROJECT_SUBSECTION_LABELS[activeProjectMiniNode.subsection] ?? "Project";
+    return `Projects / ${subsectionLabel} / ${activeProjectMiniNode.title}`;
+  }, [activeProjectMiniNode, isProjectsSelected]);
+  const contextRibbon = useMemo(() => {
+    if (!selectedNode) return null;
+    if (isProjectsSelected) {
+      if (activeProjectMiniNode) {
+        return projectBreadcrumb;
+      }
+      return "Projects / Browse";
+    }
+    if (isExperienceSelected) {
+      if (activeExperienceMiniNode) {
+        return `Experience / ${activeExperienceMiniNode.title}`;
+      }
+      return "Experience / Browse";
+    }
+    return selectedNode.title;
+  }, [
+    activeExperienceMiniNode,
+    activeProjectMiniNode,
+    isExperienceSelected,
+    isProjectsSelected,
+    projectBreadcrumb,
+    selectedNode,
+  ]);
   const panelNextNode =
     showPanel === null
       ? null
@@ -651,9 +705,8 @@ export function GlobeExperience() {
       : 22;
   const usePanelAnchoredConnector =
     isSplitView && resumePanelAnchor !== null && showPanel !== null;
-  const streamStartYPercent = usePanelAnchoredConnector
-    ? resumePanelAnchor.topPct
-    : pinStreamStartYPercent;
+  // Keep connector Y independent from panel anchor to avoid panel-position feedback loops.
+  const streamStartYPercent = pinStreamStartYPercent;
   const streamStartY = `${streamStartYPercent}%`;
   const connectorBarWidthPct = usePanelAnchoredConnector
     ? Math.max(4, resumePanelAnchor.leftPct - CONNECTOR_BAR_LEFT_PCT)
@@ -715,7 +768,7 @@ export function GlobeExperience() {
     hoverCloseTimeoutRef.current = window.setTimeout(() => {
       setHoveredSectionId((current) => (current === id ? null : current));
       hoverCloseTimeoutRef.current = null;
-    }, 180);
+    }, motionDelayMs.hoverTrayDismiss);
   };
 
   const onSelectNode = (node: ResumeNode) => {
@@ -802,6 +855,59 @@ export function GlobeExperience() {
     // Keep the current camera pose; only close UI overlays.
     setSceneMode("idle");
   };
+
+  useEffect(() => {
+    const onWindowKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target) {
+        const tag = target.tagName.toLowerCase();
+        if (
+          target.isContentEditable ||
+          tag === "input" ||
+          tag === "textarea" ||
+          tag === "select"
+        ) {
+          return;
+        }
+      }
+
+      if (event.key === "Escape") {
+        if (isProjectsSelected && activeProjectMiniNodeId) {
+          event.preventDefault();
+          onClearProjectSelection();
+          return;
+        }
+        if (isExperienceSelected && activeExperienceMiniNodeId) {
+          event.preventDefault();
+          setActiveExperienceMiniNodeId(null);
+          setSceneMode("focusing");
+          return;
+        }
+        if (selectedNode) {
+          event.preventDefault();
+          onClosePanel();
+        }
+        return;
+      }
+
+      if (isProjectsSelected && selectedNode && (event.key === "ArrowLeft" || event.key === "ArrowRight")) {
+        event.preventDefault();
+        onStepProject(event.key === "ArrowRight" ? 1 : -1);
+      }
+    };
+
+    window.addEventListener("keydown", onWindowKeyDown);
+    return () => window.removeEventListener("keydown", onWindowKeyDown);
+  }, [
+    activeExperienceMiniNodeId,
+    activeProjectMiniNodeId,
+    isExperienceSelected,
+    isProjectsSelected,
+    onClearProjectSelection,
+    onClosePanel,
+    onStepProject,
+    selectedNode,
+  ]);
 
   const dprRange: [number, number] = prefersReducedMotion
     ? [1, 1.2]
@@ -923,10 +1029,8 @@ export function GlobeExperience() {
           >
             {resumeNodes.map((node) => {
               const isActive = activeNodeId === node.id;
-              const isExpandable = node.id === "experience" || node.id === "projects";
-              const isMenuOpen =
-                (node.id === "experience" && showExperienceHoverMenu) ||
-                (node.id === "projects" && showProjectsHoverMenu);
+              const isExpandable = node.id === "experience";
+              const isMenuOpen = node.id === "experience" && showExperienceHoverMenu;
               const nodeGlowColor =
                 node.id === "experience"
                   ? "rgba(56, 189, 248, 0.5)"
@@ -952,15 +1056,24 @@ export function GlobeExperience() {
                 <div
                   key={node.id}
                   className="relative"
-                  onMouseEnter={() => openHoverTray(node.id)}
-                  onMouseLeave={() => closeHoverTraySoon(node.id)}
+                  onMouseEnter={() => {
+                    if (node.id === "experience") openHoverTray(node.id);
+                  }}
+                  onMouseLeave={() => {
+                    if (node.id === "experience") closeHoverTraySoon(node.id);
+                  }}
                 >
                   <button
                     type="button"
                     onClick={() => onSelectNode(node)}
-                    onFocus={() => openHoverTray(node.id)}
-                    className="group relative isolate min-h-11 shrink-0 overflow-hidden rounded-full border px-4 py-2 text-sm font-semibold tracking-[0.01em] backdrop-blur-xl transition-all duration-300 hover:-translate-y-[1px] hover:scale-[1.02] hover:border-sky-300/60 hover:text-white hover:shadow-[0_0_0_1px_rgba(125,211,252,0.34)_inset,0_16px_34px_rgba(2,6,23,0.5)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70 focus-visible:ring-offset-0 active:translate-y-0 active:scale-[0.99]"
-                    style={buttonStyle}
+                    onFocus={() => {
+                      if (node.id === "experience") openHoverTray(node.id);
+                    }}
+                    className={`group relative isolate min-h-11 shrink-0 overflow-hidden px-4 py-2 text-sm font-semibold tracking-[0.01em] backdrop-blur-xl transition-all hover:-translate-y-[1px] hover:scale-[1.02] hover:border-sky-300/60 hover:text-white hover:shadow-[0_0_0_1px_rgba(125,211,252,0.34)_inset,0_16px_34px_rgba(2,6,23,0.5)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70 focus-visible:ring-offset-0 active:translate-y-0 active:scale-[0.99] ${SURFACE_PILL_BUTTON}`}
+                    style={{
+                      ...buttonStyle,
+                      transitionDuration: `${motionDuration.medium}s`,
+                    }}
                   >
                     <span
                       aria-hidden
@@ -1008,11 +1121,11 @@ export function GlobeExperience() {
                     <AnimatePresence>
                       {showExperienceHoverMenu ? (
                         <motion.div
-                          className="pointer-events-auto absolute left-1/2 top-full mt-2 w-[min(96vw,36rem)] -translate-x-1/2 overflow-y-auto rounded-3xl border border-white/20 bg-slate-950/78 p-3.5 shadow-[0_20px_60px_rgba(2,6,23,0.55)] backdrop-blur-xl md:w-[34rem]"
+                          className={`pointer-events-auto absolute left-1/2 top-full mt-2 w-[min(96vw,36rem)] -translate-x-1/2 overflow-y-auto p-4 md:w-[34rem] ${SURFACE_POPOVER}`}
                           initial={{ opacity: 0, y: -8, x: 10 }}
                           animate={{ opacity: 1, y: 0, x: 0 }}
                           exit={{ opacity: 0, y: -6, x: 8 }}
-                          transition={{ duration: 0.2, ease: "easeOut" }}
+                          transition={{ duration: motionDuration.medium, ease: motionEase.smoothOut }}
                         >
                           <div className="mb-3 flex items-center justify-between px-1">
                             <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-200">
@@ -1064,86 +1177,20 @@ export function GlobeExperience() {
                       ) : null}
                     </AnimatePresence>
                   ) : null}
-                  {node.id === "projects" ? (
-                    <AnimatePresence>
-                      {showProjectsHoverMenu ? (
-                        <motion.div
-                          className="pointer-events-auto absolute left-1/2 top-full mt-2 max-h-[min(70dvh,30rem)] w-[min(96vw,46rem)] -translate-x-1/2 overflow-y-auto rounded-3xl border border-white/20 bg-slate-950/78 p-3.5 shadow-[0_20px_60px_rgba(2,6,23,0.55)] backdrop-blur-xl md:max-h-[calc(100dvh-7rem)] md:w-[42rem]"
-                          initial={{ opacity: 0, y: -8, x: -10 }}
-                          animate={{ opacity: 1, y: 0, x: 0 }}
-                          exit={{ opacity: 0, y: -6, x: -8 }}
-                          transition={{ duration: 0.2, ease: "easeOut" }}
-                        >
-                          <div className="mb-3 flex items-center justify-between px-1">
-                            <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-200">
-                              Project nodes
-                            </div>
-                            <div className="rounded-full border border-white/20 bg-white/5 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.12em] text-slate-300">
-                              {projectMiniNodes.length} total
-                            </div>
-                          </div>
-                          <motion.div layout className="space-y-3.5">
-                            {PROJECT_TRAY_GROUPS.map((group) => {
-                              const nodes = projectMiniNodes.filter(
-                                (node) => node.subsection === group.key,
-                              );
-                              if (nodes.length === 0) return null;
-                              return (
-                                <section key={group.key}>
-                                  <h4 className="mb-2 px-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400">
-                                    {group.label}
-                                  </h4>
-                                  <div className="grid grid-cols-2 gap-2 md:grid-cols-3">
-                                    {nodes.map((miniNode) => {
-                                      const isMiniActive =
-                                        activeProjectMiniNodeId === miniNode.id;
-                                      return (
-                                        <button
-                                          key={miniNode.id}
-                                          type="button"
-                                          onClick={() => onSelectProjectMiniNode(miniNode.id)}
-                                          className="group relative overflow-hidden rounded-2xl border px-3 py-2.5 text-left text-xs font-semibold leading-snug shadow-[inset_0_1px_0_rgba(255,255,255,0.1)] transition-all duration-300 hover:-translate-y-0.5 hover:border-violet-300/65 hover:text-white hover:shadow-[0_0_0_1px_rgba(196,181,253,0.24)_inset,0_14px_28px_rgba(2,6,23,0.42)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/80 md:text-[0.8rem]"
-                                          style={
-                                            isMiniActive
-                                              ? {
-                                                  borderColor: colorToRgba(ACCENT_COLOR_HEX, 0.88),
-                                                  backgroundImage: `linear-gradient(140deg, ${colorToRgba(ACCENT_COLOR_HEX, 0.3)} 0%, ${colorToRgba(ACCENT_COLOR_HEX, 0.16)} 55%, rgba(15, 23, 42, 0.94) 100%)`,
-                                                  color: "rgb(240, 249, 255)",
-                                                  boxShadow: `0 0 0 1px ${colorToRgba(ACCENT_COLOR_HEX, 0.35)} inset, 0 12px 30px ${colorToRgba(ACCENT_COLOR_HEX, 0.2)}`,
-                                                }
-                                              : {
-                                                  borderColor: "rgba(148, 163, 184, 0.4)",
-                                                  backgroundImage:
-                                                    "linear-gradient(140deg, rgba(30, 41, 59, 0.82) 0%, rgba(15, 23, 42, 0.92) 100%)",
-                                                  color: "rgb(226, 232, 240)",
-                                                }
-                                          }
-                                        >
-                                          <span className="relative z-10">{miniNode.title}</span>
-                                          <span
-                                            aria-hidden
-                                            className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100"
-                                            style={{
-                                              backgroundImage:
-                                                "radial-gradient(circle at 20% 18%, rgba(167, 139, 250, 0.26) 0%, rgba(15, 23, 42, 0) 56%)",
-                                            }}
-                                          />
-                                        </button>
-                                      );
-                                    })}
-                                  </div>
-                                </section>
-                              );
-                            })}
-                          </motion.div>
-                        </motion.div>
-                      ) : null}
-                    </AnimatePresence>
-                  ) : null}
                 </div>
               );
             })}
           </nav>
+          {contextRibbon ? (
+            <motion.div
+              className="pointer-events-none mt-1 rounded-full border border-white/15 bg-slate-950/62 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-200/95 backdrop-blur-xl md:mt-0 md:self-center"
+              initial={{ opacity: 0, y: -6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: motionDuration.medium, ease: motionEase.smoothOut }}
+            >
+              {contextRibbon}
+            </motion.div>
+          ) : null}
         </div>
       </div>
 
@@ -1179,9 +1226,11 @@ export function GlobeExperience() {
         onGoToPrevProject={() => onStepProject(-1)}
         onGoToNextProject={() => onStepProject(1)}
         projectNavPosition={projectNavPosition}
+        projectBreadcrumb={projectBreadcrumb}
+        contextRibbon={contextRibbon}
         scrollToBulletIndex={pendingExperienceScrollIndex}
         onDidScrollToBullet={() => setPendingExperienceScrollIndex(null)}
-        onPanelAnchorChange={setResumePanelAnchor}
+        onPanelAnchorChange={handleResumePanelAnchorChange}
       />
       {activeMiniDetail && isExperienceSelected ? (
         <MiniNodeDetailPanel detail={activeMiniDetail} onClose={onClosePanel} />

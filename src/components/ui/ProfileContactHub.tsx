@@ -17,6 +17,7 @@ import {
   type ProfileHubRow,
 } from "@/data/profileHub";
 import { ACCENT_COLOR_HEX, colorToRgba } from "@/lib/colorFormat";
+import { SURFACE_SHELL_DARK } from "@/lib/uiSurfaces";
 
 function Icon({ type, className }: { type: ProfileContactIcon; className?: string }) {
   const cn = className ?? "h-4 w-4 shrink-0 text-slate-200";
@@ -256,7 +257,7 @@ export function ProfileContactHub() {
   }, [updateScrollMetrics]);
 
   const cardScrollClass =
-    "max-h-[min(72dvh,calc(100dvh-5.5rem))] overflow-x-hidden overscroll-contain rounded-2xl border border-white/15 bg-slate-950/70 p-4 shadow-lg shadow-black/30 backdrop-blur-xl " +
+    `max-h-[min(72dvh,calc(100dvh-5.5rem))] overflow-x-hidden overscroll-contain p-[var(--surface-pad-sm)] ${SURFACE_SHELL_DARK} ` +
     (hasVerticalScroll
       ? "overflow-y-scroll resume-panel-scroll-accent "
       : "overflow-y-auto ");

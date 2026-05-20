@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo } from "react";
 import { Color, SRGBColorSpace, Texture } from "three";
 import { useTexture } from "@react-three/drei";
 import { useThree } from "@react-three/fiber";
@@ -10,10 +10,7 @@ import { publicPath } from "@/lib/basePath";
  * Flat Blue Marble (no shaded relief). High WebP uses max WebP width (16383px); baked from 21600×10800 source.
  * If GPU memory or upload stalls matter, consider KTX2/Basis (etc.) instead of large decoded bitmaps.
  */
-const EARTH_DAY_TEXTURES = {
-  low: publicPath("/bluemarble2knotopo.webp"),
-  high: publicPath("/bluemarble8knotopo.webp"),
-};
+const DAY_MAP = publicPath("/8k.jpg");
 const NIGHT_MAP = publicPath("/blackmarble2k.webp");
 
 type GlobeProps = {
@@ -24,42 +21,8 @@ type GlobeProps = {
 
 export function Globe({ isMobile, reducedMotion, sunDirection }: GlobeProps) {
   const gl = useThree((s) => s.gl);
-  const [dayMapPath, setDayMapPath] = useState(EARTH_DAY_TEXTURES.low);
+  const dayMapPath = DAY_MAP;
   const nightMapPath = NIGHT_MAP;
-
-  useEffect(() => {
-    // Avoid loading 8k textures on constrained devices to reduce VRAM spikes.
-    const nav = navigator as Navigator & { deviceMemory?: number };
-    const memory = nav.deviceMemory ?? 4;
-    const cores = navigator.hardwareConcurrency ?? 4;
-    const prefersReducedData = window.matchMedia?.("(prefers-reduced-data: reduce)")?.matches;
-    const canUpgrade =
-      !isMobile && !reducedMotion && !prefersReducedData && memory >= 12 && cores >= 8;
-
-    if (!canUpgrade) return;
-
-    const w = window as Window & {
-      requestIdleCallback?: (cb: IdleRequestCallback, opts?: IdleRequestOptions) => number;
-      cancelIdleCallback?: (id: number) => void;
-    };
-    const scheduleUpgrade = () => setDayMapPath(EARTH_DAY_TEXTURES.high);
-    let timeoutId: ReturnType<typeof setTimeout> | null = null;
-    let idleId: number | null = null;
-
-    if (typeof w.requestIdleCallback === "function") {
-      idleId = w.requestIdleCallback(scheduleUpgrade, { timeout: 3000 });
-      return () => {
-        if (idleId !== null && typeof w.cancelIdleCallback === "function") {
-          w.cancelIdleCallback(idleId);
-        }
-      };
-    }
-
-    timeoutId = setTimeout(scheduleUpgrade, 2500);
-    return () => {
-      if (timeoutId !== null) clearTimeout(timeoutId);
-    };
-  }, [isMobile, reducedMotion]);
 
   const onTexturesLoaded = useCallback(
     (loaded: Texture[]) => {

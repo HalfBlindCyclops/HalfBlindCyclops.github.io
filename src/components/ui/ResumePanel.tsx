@@ -4,9 +4,11 @@ import { AnimatePresence, motion } from "framer-motion";
 import {
   useCallback,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   type CSSProperties,
+  type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
 } from "react";
 import {
@@ -16,6 +18,13 @@ import {
 } from "@/data/projectMiniNodes";
 import type { ResumeNode, ResumeProjectSubsections } from "@/data/resumeNodes";
 import { ACCENT_COLOR_HEX, colorToRgba } from "@/lib/colorFormat";
+import { motionDuration, motionEase, motionStagger } from "@/lib/motion";
+import {
+  SURFACE_INSET,
+  SURFACE_PILL_BUTTON,
+  SURFACE_SECTION_HEADER,
+  SURFACE_SHELL_LIGHT,
+} from "@/lib/uiSurfaces";
 /** Viewport-relative top-left of the resume panel (for connector alignment). */
 export type ResumePanelAnchor = {
   leftPct: number;
@@ -97,7 +106,11 @@ function StructuredBullet({
         data-bullet-index={bulletIndex}
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.15 + index * 0.06, duration: 0.24 }}
+        transition={{
+          delay: motionStagger.listBaseDelay + index * motionStagger.listStep,
+          duration: motionDuration.medium,
+          ease: motionEase.smoothOut,
+        }}
       >
         {clickable ? (
           <button type="button" onClick={onClick} className={itemClassName} style={itemStyle}>
@@ -127,7 +140,11 @@ function StructuredBullet({
       data-bullet-index={bulletIndex}
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: 0.15 + index * 0.06, duration: 0.24 }}
+      transition={{
+        delay: motionStagger.listBaseDelay + index * motionStagger.listStep,
+        duration: motionDuration.medium,
+        ease: motionEase.smoothOut,
+      }}
     >
       {clickable ? (
         <button type="button" onClick={onClick} className={itemClassName} style={itemStyle}>
@@ -201,10 +218,12 @@ function ProjectIndexButton({
   node,
   isActive,
   onSelect,
+  onKeyDown,
 }: {
   node: ProjectMiniNode;
   isActive: boolean;
   onSelect: () => void;
+  onKeyDown?: (event: ReactKeyboardEvent<HTMLButtonElement>) => void;
 }) {
   const subtitle = projectCardSubtitle(node);
   return (
@@ -212,7 +231,8 @@ function ProjectIndexButton({
       type="button"
       data-project-id={node.id}
       onClick={onSelect}
-      className="group w-full rounded-xl border px-3 py-2.5 text-left transition hover:border-white/35 hover:bg-white/5"
+      onKeyDown={onKeyDown}
+      className="group w-full rounded-xl border px-3 py-2.5 text-left transition hover:border-white/35 hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70"
       style={
         isActive
           ? {
@@ -241,21 +261,28 @@ function ProjectDetailView({
   onGoToPrev,
   onGoToNext,
   navPosition,
+  breadcrumb,
 }: {
   detail: ResumeProjectDetail;
   onClearSelection?: () => void;
   onGoToPrev?: () => void;
   onGoToNext?: () => void;
   navPosition?: { current: number; total: number };
+  breadcrumb?: string;
 }) {
   return (
-    <motion.div layout className="space-y-4" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+    <motion.div layout className="floating-surface-rhythm" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
       <div className="flex flex-wrap items-center gap-2">
+        {breadcrumb ? (
+          <p className="w-full text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-300/95">
+            {breadcrumb}
+          </p>
+        ) : null}
         {onClearSelection ? (
           <button
             type="button"
             onClick={onClearSelection}
-            className="inline-flex items-center gap-1 rounded-full border border-white/25 bg-white/5 px-3 py-1.5 text-xs font-semibold text-slate-200 transition hover:bg-white/10"
+            className={`inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-slate-200 ${SURFACE_PILL_BUTTON}`}
           >
             <span aria-hidden>←</span> All projects
           </button>
@@ -266,7 +293,7 @@ function ProjectDetailView({
               type="button"
               onClick={onGoToPrev}
               aria-label="Previous project"
-              className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/25 bg-white/5 text-sm text-slate-200 transition hover:bg-white/10"
+              className={`inline-flex h-8 w-8 items-center justify-center text-sm text-slate-200 ${SURFACE_PILL_BUTTON}`}
             >
               ‹
             </button>
@@ -277,7 +304,7 @@ function ProjectDetailView({
               type="button"
               onClick={onGoToNext}
               aria-label="Next project"
-              className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/25 bg-white/5 text-sm text-slate-200 transition hover:bg-white/10"
+              className={`inline-flex h-8 w-8 items-center justify-center text-sm text-slate-200 ${SURFACE_PILL_BUTTON}`}
             >
               ›
             </button>
@@ -300,7 +327,7 @@ function ProjectDetailView({
         </div>
       ) : null}
       {detail.highlights && detail.highlights.length > 0 ? (
-        <div className="space-y-2 rounded-xl border border-white/15 bg-slate-900/30 p-3.5">
+        <div className={`space-y-2 p-4 ${SURFACE_INSET}`}>
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-300">
             Highlights
           </p>
@@ -318,7 +345,7 @@ function ProjectDetailView({
         </div>
       ) : null}
       {detail.impact || detail.status ? (
-        <div className="grid gap-2 rounded-xl border border-white/15 bg-slate-900/30 p-3.5 text-sm text-slate-200">
+        <div className={`grid gap-2 p-4 text-sm text-slate-200 ${SURFACE_INSET}`}>
           {detail.status ? (
             <p>
               <span className="font-semibold text-white">Status:</span> {detail.status}
@@ -364,6 +391,7 @@ function ProjectsMasterDetail({
   onGoToPrevProject,
   onGoToNextProject,
   projectNavPosition,
+  breadcrumb,
 }: {
   subsections: ResumeProjectSubsections;
   activeProjectMiniNodeId: string | null;
@@ -373,11 +401,46 @@ function ProjectsMasterDetail({
   onGoToPrevProject?: () => void;
   onGoToNextProject?: () => void;
   projectNavPosition?: { current: number; total: number };
+  breadcrumb?: string;
 }) {
   const hasSelection = projectDetail !== null;
+  const projectOrder = useMemo(
+    () => PROJECT_GROUPS.flatMap((group) => group.nodes.map((node) => node.id)),
+    [],
+  );
+  const indexMap = useMemo(
+    () => new Map(projectOrder.map((id, idx) => [id, idx])),
+    [projectOrder],
+  );
+
+  const focusProjectAt = useCallback(
+    (nextIndex: number) => {
+      if (nextIndex < 0 || nextIndex >= projectOrder.length) return;
+      const id = projectOrder[nextIndex];
+      const nextButton = document.querySelector<HTMLButtonElement>(`[data-project-id="${id}"]`);
+      nextButton?.focus();
+    },
+    [projectOrder],
+  );
+
+  const handleProjectButtonKeyDown = useCallback(
+    (event: ReactKeyboardEvent<HTMLButtonElement>, projectId: string) => {
+      const currentIndex = indexMap.get(projectId);
+      if (currentIndex === undefined) return;
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        focusProjectAt(Math.min(projectOrder.length - 1, currentIndex + 1));
+      }
+      if (event.key === "ArrowUp") {
+        event.preventDefault();
+        focusProjectAt(Math.max(0, currentIndex - 1));
+      }
+    },
+    [focusProjectAt, indexMap, projectOrder.length],
+  );
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4 md:flex-row md:gap-5">
+    <div className="flex min-h-0 flex-1 flex-col gap-4 md:flex-row md:gap-6">
       <nav
         className={
           hasSelection
@@ -386,12 +449,12 @@ function ProjectsMasterDetail({
         }
         aria-label="Project list"
       >
-        <div className="space-y-5">
+        <div className="space-y-6">
           {PROJECT_GROUPS.map((group) => (
             <section key={group.key}>
-              <h3 className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">
-            {group.title}
-          </h3>
+              <h3 className={SURFACE_SECTION_HEADER}>
+                {group.title}
+              </h3>
               <ul className="mt-2 space-y-2">
                 {group.nodes.map((node) => (
                   <li key={node.id}>
@@ -400,13 +463,14 @@ function ProjectsMasterDetail({
                         node={node}
                         isActive={activeProjectMiniNodeId === node.id}
                         onSelect={() => onSelectProjectMiniNode(node.id)}
+                        onKeyDown={(event) => handleProjectButtonKeyDown(event, node.id)}
                       />
                     ) : null}
                   </li>
                 ))}
-          </ul>
-        </section>
-      ))}
+              </ul>
+            </section>
+          ))}
         </div>
       </nav>
       <div className="min-h-0 min-w-0 flex-1 md:overflow-y-auto md:overscroll-y-contain">
@@ -417,12 +481,13 @@ function ProjectsMasterDetail({
             onGoToPrev={onGoToPrevProject}
             onGoToNext={onGoToNextProject}
             navPosition={projectNavPosition}
+            breadcrumb={breadcrumb}
           />
         ) : (
-          <div className="rounded-xl border border-dashed border-white/15 bg-slate-900/20 px-4 py-8 text-center md:py-12">
+          <div className={`border-dashed px-4 py-8 text-center md:py-12 ${SURFACE_INSET}`}>
             <p className="text-base font-medium text-slate-200">Choose a project</p>
             <p className="mt-2 text-sm leading-relaxed text-slate-400">
-              Pick from the list, the globe, or the Project nodes menu above to read highlights,
+              Pick from the list or a globe pin to read highlights,
               stack, and impact.
             </p>
           </div>
@@ -457,6 +522,8 @@ type ResumePanelProps = {
   onGoToPrevProject?: () => void;
   onGoToNextProject?: () => void;
   projectNavPosition?: { current: number; total: number };
+  projectBreadcrumb?: string | null;
+  contextRibbon?: string | null;
   scrollToBulletIndex?: number | null;
   onDidScrollToBullet?: () => void;
   onPanelAnchorChange?: (anchor: ResumePanelAnchor | null) => void;
@@ -480,12 +547,16 @@ export function ResumePanel({
   onGoToPrevProject,
   onGoToNextProject,
   projectNavPosition,
+  projectBreadcrumb = null,
+  contextRibbon = null,
   scrollToBulletIndex = null,
   onDidScrollToBullet,
   onPanelAnchorChange,
 }: ResumePanelProps) {
+  const PANEL_ANCHOR_EPSILON = 0.05;
   const asideRef = useRef<HTMLElement>(null);
   const scrollBodyRef = useRef<HTMLDivElement>(null);
+  const lastReportedAnchorRef = useRef<ResumePanelAnchor | null>(null);
   const [hasVerticalScroll, setHasVerticalScroll] = useState(false);
   const [showProjectsScrollCue, setShowProjectsScrollCue] = useState(false);
 
@@ -493,20 +564,36 @@ export function ResumePanel({
     if (!onPanelAnchorChange || !isSplitView) return;
     const el = asideRef.current;
     if (!el) {
-      onPanelAnchorChange(null);
+      if (lastReportedAnchorRef.current !== null) {
+        lastReportedAnchorRef.current = null;
+        onPanelAnchorChange(null);
+      }
       return;
     }
     const rect = el.getBoundingClientRect();
     const vw = window.innerWidth;
     const vh = window.innerHeight;
     if (vw <= 0 || vh <= 0 || rect.width <= 0) {
-      onPanelAnchorChange(null);
+      if (lastReportedAnchorRef.current !== null) {
+        lastReportedAnchorRef.current = null;
+        onPanelAnchorChange(null);
+      }
       return;
     }
-    onPanelAnchorChange({
+    const nextAnchor = {
       leftPct: (rect.left / vw) * 100,
       topPct: (rect.top / vh) * 100,
-    });
+    };
+    const prevAnchor = lastReportedAnchorRef.current;
+    if (
+      prevAnchor &&
+      Math.abs(prevAnchor.leftPct - nextAnchor.leftPct) < PANEL_ANCHOR_EPSILON &&
+      Math.abs(prevAnchor.topPct - nextAnchor.topPct) < PANEL_ANCHOR_EPSILON
+    ) {
+      return;
+    }
+    lastReportedAnchorRef.current = nextAnchor;
+    onPanelAnchorChange(nextAnchor);
   }, [isSplitView, onPanelAnchorChange]);
 
   const updateScrollMetrics = useCallback(() => {
@@ -530,7 +617,10 @@ export function ResumePanel({
 
   useLayoutEffect(() => {
     if (!node) {
-      onPanelAnchorChange?.(null);
+      if (lastReportedAnchorRef.current !== null) {
+        lastReportedAnchorRef.current = null;
+        onPanelAnchorChange?.(null);
+      }
       const id = requestAnimationFrame(() => {
         setHasVerticalScroll(false);
         setShowProjectsScrollCue(false);
@@ -563,7 +653,10 @@ export function ResumePanel({
 
   useLayoutEffect(() => {
     if (!node || !isSplitView) {
-      onPanelAnchorChange?.(null);
+      if (lastReportedAnchorRef.current !== null) {
+        lastReportedAnchorRef.current = null;
+        onPanelAnchorChange?.(null);
+      }
       return;
     }
     reportPanelAnchor();
@@ -634,15 +727,21 @@ export function ResumePanel({
     ? { ["--resume-scroll-thumb" as string]: ACCENT_COLOR_HEX }
     : undefined;
   const asideClass =
-    "pointer-events-auto absolute z-50 flex flex-col overflow-hidden rounded-2xl border border-white/20 bg-white/10 text-slate-100 shadow-2xl backdrop-blur-xl min-h-0 " +
-    "left-1/2 w-[min(92vw,30rem)] -translate-x-1/2 p-6 max-h-[min(calc(100dvh-6rem),90dvh)] " +
+    `pointer-events-auto absolute z-50 flex flex-col overflow-hidden text-slate-100 min-h-0 ${SURFACE_SHELL_LIGHT} ` +
+    "left-1/2 w-[min(92vw,30rem)] -translate-x-1/2 max-h-[min(calc(100dvh-6rem),90dvh)] p-[var(--surface-pad-md)] " +
     "top-[max(5.5rem,8dvh)] -translate-y-0 sm:top-[max(6rem,10dvh)] " +
-    "md:top-auto md:max-h-[min(88vh,calc(100dvh-5rem))] md:translate-x-0 md:translate-y-0 md:p-8 " +
+    "md:top-auto md:max-h-[min(88vh,calc(100dvh-5rem))] md:translate-x-0 md:translate-y-0 md:p-[var(--surface-pad-lg)] " +
     (splitAnchored
       ? "md:left-auto md:top-auto md:w-auto md:max-w-[min(58rem,calc(100vw-3rem))]"
       : "md:left-auto md:w-[36rem] md:max-w-[min(36rem,calc(100vw-3rem))] " +
         (isSplitView ? "md:right-[2.75rem]" : ""));
   const asideStyle: CSSProperties = {
+    ["--surface-border-strong" as string]:
+      node?.id === "projects" || node?.id === "experience"
+        ? "rgba(255, 255, 255, 0.24)"
+        : "rgba(255, 255, 255, 0.2)",
+    ["--surface-border-soft" as string]:
+      splitAnchored ? "rgba(255, 255, 255, 0.18)" : "rgba(255, 255, 255, 0.15)",
     ...(splitStyle
       ? { ...splitStyle, boxShadow: accentPanelShadow }
       : { boxShadow: accentPanelShadow }),
@@ -677,9 +776,13 @@ export function ResumePanel({
               ? { opacity: 0, x: 80, y: -8, clipPath: "inset(0 100% 0 0 round 1rem)" }
               : { opacity: 0, y: 14, scale: 0.98 }
           }
-          transition={{ duration: 0.42, delay: 0.12, ease: "easeOut" }}
+          transition={{
+            duration: motionDuration.slow,
+            delay: motionStagger.panelDelay,
+            ease: motionEase.smoothOut,
+          }}
         >
-          <div className="mb-5 flex shrink-0 items-start justify-between gap-4">
+          <div className="mb-5 flex shrink-0 items-start justify-between gap-[var(--surface-gap-md)]">
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-x-5 gap-y-2 md:gap-x-6">
                 <h2
@@ -697,7 +800,7 @@ export function ResumePanel({
                         ? `Go to next section: ${nextSectionTitle}`
                         : "Go to next section"
                     }
-                    className="inline-flex shrink-0 items-center gap-1.5 rounded-full border px-4 py-2 text-[0.9375rem] font-medium tracking-wide transition hover:brightness-110 md:px-5 md:py-2.5 md:text-base"
+                    className={`inline-flex shrink-0 items-center gap-1.5 px-4 py-2 text-[0.9375rem] font-medium tracking-wide hover:brightness-110 md:px-5 md:py-2.5 md:text-base ${SURFACE_PILL_BUTTON}`}
                     style={{
                       borderColor: colorToRgba(ACCENT_COLOR_HEX, 0.45),
                       backgroundColor: colorToRgba(ACCENT_COLOR_HEX, 0.1),
@@ -715,6 +818,11 @@ export function ResumePanel({
                   </button>
                 ) : null}
               </div>
+              {contextRibbon ? (
+                <p className="mt-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-300/95">
+                  {contextRibbon}
+                </p>
+              ) : null}
               {node.subtitle.trim() ? (
                 <p
                   className={
@@ -731,7 +839,7 @@ export function ResumePanel({
               type="button"
               aria-label="Close section"
               onClick={onClose}
-              className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-white/25 bg-white/10 text-lg leading-none text-slate-100 transition hover:bg-white/20"
+              className={`inline-flex h-12 w-12 shrink-0 items-center justify-center text-lg leading-none text-slate-100 ${SURFACE_PILL_BUTTON}`}
             >
               ×
             </button>
@@ -752,6 +860,7 @@ export function ResumePanel({
                   onGoToPrevProject={onGoToPrevProject}
                   onGoToNextProject={onGoToNextProject}
                   projectNavPosition={projectNavPosition}
+                  breadcrumb={projectBreadcrumb ?? undefined}
                 />
               ) : (
                 <ul className="space-y-5 md:space-y-6">
@@ -770,7 +879,11 @@ export function ResumePanel({
                         data-bullet-index={index}
                         initial={{ opacity: 0, y: 8 }}
                         animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.15 + index * 0.06, duration: 0.24 }}
+                        transition={{
+                          delay: motionStagger.listBaseDelay + index * motionStagger.listStep,
+                          duration: motionDuration.medium,
+                          ease: motionEase.smoothOut,
+                        }}
                       >
                         <span
                           className="mt-2.5 h-2 w-2 shrink-0 rounded-full"

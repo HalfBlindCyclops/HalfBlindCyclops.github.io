@@ -81,6 +81,25 @@ const cloudFragmentShader = `
     return clamp(max(max(basinA, basinB), basinC), 0.0, 1.0);
   }
 
+  float cycloneCell(vec3 p, vec3 center, float armCount, float spinRate, float seed) {
+    vec3 helper = abs(center.y) > 0.92 ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 1.0, 0.0);
+    vec3 basisX = normalize(cross(helper, center));
+    vec3 basisY = normalize(cross(center, basisX));
+    vec2 uv = vec2(dot(p, basisX), dot(p, basisY));
+    float r = length(uv);
+    float ang = atan(uv.y, uv.x);
+
+    float eyeWall = smoothstep(0.24, 0.03, r);
+    float outerFalloff = smoothstep(0.55, 0.08, r);
+    float spiralPhase = ang * armCount - r * 30.0 + uTime * spinRate + seed;
+    float spiral = 0.5 + 0.5 * sin(spiralPhase);
+    float banded = smoothstep(0.5, 0.86, spiral);
+    float turbulence = smoothstep(0.36, 0.82, fbm(p * 8.5 + vec3(seed, seed * 0.7, -seed * 0.4)));
+
+    float cell = max(eyeWall * (0.6 + 0.4 * banded), banded * outerFalloff * turbulence);
+    return clamp(cell, 0.0, 1.0);
+  }
+
   void main() {
     vec3 N = normalize(vNormalW);
     vec3 L = normalize(sunDirection);
@@ -98,12 +117,37 @@ const cloudFragmentShader = `
     stormBand = smoothstep(0.58, 0.92, stormBand);
     float region = regionalMask(qLarge);
     float filament = smoothstep(0.53, 0.78, fbm(q * 1.9 + vec3(5.0, -13.0, 22.0)));
+    float frontalNoise = smoothstep(0.54, 0.82, fbm(q * 3.2 + vec3(-25.0, 11.0, 9.0)));
 
     float lat = abs(P.y);
     float polarFade = smoothstep(0.84, 0.99, lat);
     float latMask = mix(1.0, 0.38, polarFade);
+    float tropicalMask = smoothstep(0.74, 0.16, lat);
+    float midLatitudeMask = smoothstep(0.08, 0.62, lat) * (1.0 - smoothstep(0.62, 0.88, lat));
 
-    float coverage = smoothstep(0.24, 0.64, coarse);
+    vec3 stormCenterA = normalize(vec3(
+      sin(uTime * 0.022 + 0.8),
+      0.22 + 0.08 * sin(uTime * 0.011 + 0.3),
+      cos(uTime * 0.02 + 1.7)
+    ));
+    vec3 stormCenterB = normalize(vec3(
+      cos(uTime * 0.018 + 2.5),
+      -0.16 + 0.07 * sin(uTime * 0.013 + 1.8),
+      sin(uTime * 0.024 + 3.1)
+    ));
+    vec3 stormCenterC = normalize(vec3(
+      sin(uTime * 0.026 + 4.2),
+      0.06 + 0.06 * cos(uTime * 0.014 + 2.3),
+      cos(uTime * 0.019 + 5.0)
+    ));
+    float cycloneA = cycloneCell(P, stormCenterA, 5.0, 1.0, 11.0);
+    float cycloneB = cycloneCell(P, stormCenterB, 4.0, -0.85, 37.0);
+    float cycloneC = cycloneCell(P, stormCenterC, 6.0, 0.7, 71.0);
+    float cycloneField = max(max(cycloneA, cycloneB), cycloneC) * tropicalMask;
+    float frontalBands = frontalNoise * midLatitudeMask * (0.45 + 0.55 * region);
+    float severeStorm = clamp(max(stormBand, cycloneField * 0.95), 0.0, 1.0);
+
+    float coverage = smoothstep(0.16, 0.52, coarse);
     float dens =
       coverage *
       (0.3 + 0.7 * smoothstep(0.24, 0.78, detail)) *
@@ -111,9 +155,11 @@ const cloudFragmentShader = `
       (0.22 + 0.78 * region) *
       (0.76 + 0.24 * filament) *
       latMask *
-      (1.0 - 0.18 * stormBand);
+      (1.0 - 0.18 * severeStorm);
+    dens += cycloneField * (0.2 + 0.15 * detail);
+    dens += frontalBands * 0.12;
 
-    dens = pow(clamp(dens, 0.0, 1.0), 1.05);
+    dens = pow(clamp(dens, 0.0, 1.0), 0.9);
 
     float ndl = dot(N, L);
     float day = smoothstep(-0.14, 0.26, ndl);
@@ -122,7 +168,7 @@ const cloudFragmentShader = `
 
     float sunWrap = clamp(ndl * 0.55 + 0.45, 0.0, 1.0);
     vec3 lit = mix(cloudShadow, cloudBright, day * (0.38 + 0.62 * sunWrap));
-    lit = mix(lit, cloudStorm, stormBand * 0.42);
+    lit = mix(lit, cloudStorm, severeStorm * 0.58 + frontalBands * 0.18);
     lit += vec3(0.1, 0.12, 0.18) * twilight * dens;
 
     float silver = pow(1.0 - max(dot(N, V), 0.0), 3.2);
@@ -130,10 +176,13 @@ const cloudFragmentShader = `
 
     float alpha =
       dens *
-      (0.16 + 0.27 * day + 0.16 * night + 0.1 * twilight) *
-      (1.0 - 0.2 * stormBand);
-    alpha = clamp(alpha, 0.0, 0.5);
-    alpha *= smoothstep(0.0, 0.08, dens);
+      (0.24 + 0.36 * day + 0.24 * night + 0.14 * twilight) *
+      (1.0 - 0.16 * severeStorm);
+    float baseCloudAlpha = smoothstep(0.26, 0.62, coarse) * 0.22 * latMask;
+    baseCloudAlpha += cycloneField * 0.08;
+    alpha = max(alpha, baseCloudAlpha);
+    alpha = clamp(alpha, 0.0, 0.78);
+    alpha *= smoothstep(0.0, 0.05, dens);
 
     gl_FragColor = vec4(lit, alpha);
   }
@@ -151,12 +200,12 @@ function CloudLayer({
   );
   const uniformSunDirection = useMemo(() => sunVec.clone(), [sunVec]);
   const cloudBright = useMemo(() => new Color("#f2f6fc"), []);
-  const cloudShadow = useMemo(() => new Color("#1c2333"), []);
-  const cloudStorm = useMemo(() => new Color("#5c6578"), []);
+  const cloudShadow = useMemo(() => new Color("#3f4a60"), []);
+  const cloudStorm = useMemo(() => new Color("#808ca3"), []);
 
   const segments = isMobile ? 64 : reducedMotion ? 78 : 96;
   /** Slightly above terrain so clouds sit over land/ocean without z-fighting. */
-  const cloudRadius = 1.008;
+  const cloudRadius = 1.014;
 
   useFrame((_, dt) => {
     const mesh = meshRef.current;
@@ -170,7 +219,7 @@ function CloudLayer({
   });
 
   return (
-    <mesh ref={meshRef} renderOrder={1}>
+    <mesh ref={meshRef} renderOrder={6}>
       <sphereGeometry args={[cloudRadius, segments, segments]} />
       <shaderMaterial
         toneMapped

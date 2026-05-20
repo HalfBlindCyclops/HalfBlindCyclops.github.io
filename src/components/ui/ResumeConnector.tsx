@@ -3,6 +3,7 @@
 import { useEffect, useLayoutEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { ACCENT_COLOR_HEX } from "@/lib/colorFormat";
+import { connectorMotion } from "@/lib/motion";
 
 /** Horizontal beam junction in SVG viewBox units (matches GlobeExperience `CONNECTOR_BAR_LEFT_PCT`). */
 export const JUNCTION_X = 45;
@@ -341,13 +342,18 @@ const svgClass =
   "pointer-events-none absolute inset-0 h-full w-full overflow-visible";
 
 /** Opacity-in for signal paths; keep in sync with horizontal beam extend in GlobeExperience. */
-export const CONNECTOR_CONNECT_SEC = 0.28;
-const svgPresenceTransition = { duration: CONNECTOR_CONNECT_SEC, ease: "easeOut" as const };
+export const CONNECTOR_CONNECT_SEC = connectorMotion.connect.duration;
+const svgPresenceTransition = {
+  duration: connectorMotion.connect.duration,
+  ease: connectorMotion.connect.ease,
+};
 
 /** Matches horizontal beam retract in GlobeExperience when switching sections (AnimatePresence exit used last “in” transition otherwise → too slow). */
-export const CONNECTOR_RETRACT_SEC = 0.08;
-const svgRetractEase = [0.22, 1, 0.36, 1] as const;
-const svgRetractTransition = { duration: CONNECTOR_RETRACT_SEC, ease: svgRetractEase };
+export const CONNECTOR_RETRACT_SEC = connectorMotion.retract.duration;
+const svgRetractTransition = {
+  duration: connectorMotion.retract.duration,
+  ease: connectorMotion.retract.ease,
+};
 
 type ResumeConnectorProps = {
   pinX: number;

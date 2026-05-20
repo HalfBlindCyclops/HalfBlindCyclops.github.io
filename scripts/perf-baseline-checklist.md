@@ -1,6 +1,7 @@
 # Runtime Baseline Checklist
 
-Use this script before and after each performance phase.
+Use this checklist before and after any rendering/performance work.
+For scenario definitions and budget source, see `docs/CODEBASE.md` and `src/lib/perfBudgets.ts`.
 
 ## Setup
 
@@ -22,6 +23,7 @@ Use this script before and after each performance phase.
 - Console logs from `[web-vitals]` (LCP/INP/CLS/FCP/TTFB).
 - Chrome trace screenshot for frame-time distribution.
 - React Profiler commit count for the same window.
+- Browser/device metadata (CPU, memory class, display refresh rate, browser version).
 
 ## Gate
 

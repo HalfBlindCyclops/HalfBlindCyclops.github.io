@@ -1,48 +1,54 @@
-# Deploying to GitHub Pages
+# Deployment Runbook (GitHub Pages)
 
-This app is a static export (`output: "export"` in `next.config.ts`). The build writes an `out/` directory you can host on GitHub Pages.
+For full architecture/deployment context, see `docs/CODEBASE.md`.
 
-## Base path
+## 1) Choose base path
 
 | Site URL | `NEXT_PUBLIC_BASE_PATH` |
 | --- | --- |
-| `https://<user>.github.io/<repo>/` | `/<repo>` (e.g. `/globesite`) |
-| `https://<user>.github.io/` (user/org site repo) | unset or `""` |
-| Custom domain at site root | unset or `""` |
+| `https://<user>.github.io/<repo>/` | `/<repo>` (example: `/globesite`) |
+| `https://<user>.github.io/` | unset or `""` |
+| Custom domain at root | unset or `""` |
 
-`basePath` in Next.js must match this value. Root-absolute asset links (PDF, textures, images) are prefixed via `publicPath()` in `src/lib/basePath.ts`.
+## 2) Build static export
 
-## Build
+Project page:
 
 ```bash
 npm ci
-# Project page (replace with your repo name):
 NEXT_PUBLIC_BASE_PATH=/your-repo-name npm run build
 ```
 
-For a user site or custom domain at `/`, run `npm run build` without setting the variable.
-
-The `export` script is an alias for `next build` when static export is enabled:
+Root-hosted site:
 
 ```bash
-NEXT_PUBLIC_BASE_PATH=/your-repo-name npm run export
+npm ci
+npm run build
 ```
 
-Upload everything under `out/` to Pages (for example the `gh-pages` branch, a `docs/` folder on the default branch, or the **GitHub Actions** workflow in `.github/workflows/pages.yml`).
+Output directory: `out/`
 
-## Local check with a path prefix
+## 3) Publish `out/`
 
-The export still writes `index.html` at the top of `out/`; `basePath` only affects URLs inside the HTML (e.g. `/globesite/_next/...`), which matches GitHub project Pages.
+Publish the generated `out/` contents to your Pages target:
 
-To verify locally with the same paths as production, run dev with the same env and open the prefixed URL:
+- `gh-pages` branch, or
+- `docs/` folder on default branch, or
+- GitHub Actions pages workflow.
+
+## 4) Local path-prefix verification
 
 ```bash
 NEXT_PUBLIC_BASE_PATH=/globesite npm run dev
 ```
 
-Then open `http://localhost:3000/globesite/` and confirm chunks, the resume PDF, and globe textures load.
+Open `http://localhost:3000/globesite/` and verify:
+
+- app chunks load
+- resume PDF link resolves
+- globe textures resolve
 
 ## Notes
 
-- `public/.nojekyll` is copied into `out/` so GitHub Pages does not ignore `_next`.
-- `next/font` (Google) fetches at build time; CI runners need network access for `next build` (default on GitHub-hosted runners).
+- `export` script is currently an alias of `build`.
+- Root-absolute public assets should use `publicPath()` so base-path deployment remains correct.

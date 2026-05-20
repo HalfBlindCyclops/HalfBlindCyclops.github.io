@@ -5,6 +5,20 @@
   --foreground: #e2e8f0;
   /* Designed on a zoomed-out browser; normalize by scaling rem-based UI sizing. */
   --ui-scale: 0.67;
+  --surface-pad-sm: 1rem;
+  --surface-pad-md: 1.5rem;
+  --surface-pad-lg: 2rem;
+  --surface-gap-tight: 0.5rem;
+  --surface-gap-md: 1rem;
+  --surface-gap-loose: 1.5rem;
+  --surface-border-soft: rgba(255, 255, 255, 0.15);
+  --surface-border-strong: rgba(255, 255, 255, 0.2);
+  --surface-bg-light: rgba(255, 255, 255, 0.1);
+  --surface-bg-dark: rgba(2, 6, 23, 0.7);
+  --surface-bg-popover: rgba(2, 6, 23, 0.78);
+  --surface-bg-inset: rgba(15, 23, 42, 0.32);
+  --surface-bg-elevated: rgba(255, 255, 255, 0.06);
+  --surface-bg-hover: rgba(255, 255, 255, 0.12);
 }
 
 @theme inline {
@@ -86,4 +100,8 @@ a {
   border-color: var(--hub-accent-border-hover);
   background-color: var(--hub-accent-bg-hover);
   color: var(--hub-accent-text-hover);
+}
+
+.floating-surface-rhythm > * + * {
+  margin-top: var(--surface-gap-md);
 }

@@ -37,9 +37,9 @@ export const resumeNodes: ResumeNode[] = [
     color: "#22d3ee",
     markerStyle: "uplinkPad",
     bullets: [
-      "People come first for me—relationships and teamwork are what I lean on most. I’m looking for a long-term team that cares about the same things I do.",
-      "B.S. in Computer Science at Northeastern (Jan 2021 – May 2026), expected GPA 3.7. Coursework in algorithms, systems, networking, distributed systems, and security.",
-      "Outside the keyboard: orbital mechanics, aerospace, and aviation; AWS Solutions Architect (SAA-C03) planned May 2026. Northeastern Club Wrestling; former four-year Norwood High varsity wrestler.",
+      "People come first for me, relationships and teamwork are what I lean on most. I’m looking for a long-term team that cares about the same things I do.",
+      "B.S. in Computer Science at Northeastern (Jan 2021 – May 2026), GPA 3.4. Coursework in algorithms, systems, networking, distributed systems, and security.",
+      "Outside the keyboard: orbital mechanics, aerospace, and aviation. Northeastern Club Wrestling; former four-year Norwood High varsity wrestler.",
     ],
     links: [
       { label: "Email", href: "mailto:Wetherell.S@Northeastern.edu" },
@@ -52,9 +52,9 @@ export const resumeNodes: ResumeNode[] = [
     id: "experience",
     title: "Experience",
     subtitle: "Research, media, consulting, and earlier roles",
-    /** Globe pin: Greenland (visual spread on the map; roles are mostly Boston-based). */
-    latitude: 61,
-    longitude: -128,
+    /** Globe pin: Europe-centered cluster anchor for the Experience node set. */
+    latitude: 51.5072,
+    longitude: -0.1276,
     color: "#38bdf8",
     markerStyle: "uplinkPad",
     bullets: [
