@@ -916,7 +916,7 @@ export function GlobeExperience() {
         className="pointer-events-none absolute top-4 z-[60] left-1/2 flex -translate-x-1/2 justify-center md:top-8"
         style={isSplitView ? { left: splitViewNavCenterX } : undefined}
       >
-        <div className="relative flex max-w-full flex-col items-center gap-2 md:flex-row md:items-start">
+        <div className="relative flex max-w-full flex-col items-center">
           <nav
             className="pointer-events-auto flex max-w-full flex-wrap justify-center gap-2"
             aria-label="Resume sections"
@@ -968,7 +968,7 @@ export function GlobeExperience() {
           </nav>
           {contextRibbon ? (
             <motion.div
-              className="pointer-events-none mt-1 rounded-full border border-white/15 bg-slate-950/62 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-200/95 backdrop-blur-xl md:mt-0 md:self-center"
+              className="pointer-events-none absolute left-1/2 top-full mt-2 -translate-x-1/2 rounded-full border border-white/15 bg-slate-950/62 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-200/95 backdrop-blur-xl"
               initial={{ opacity: 0, y: -6 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: motionDuration.medium, ease: motionEase.smoothOut }}

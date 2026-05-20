@@ -105,6 +105,7 @@ Layout behavior:
 - Mobile breakpoint is `"(max-width: 767px)"`.
 - Desktop uses split view (globe left-center framing + panel/connector on right).
 - Mobile uses stacked behavior and simplified placement constraints.
+- Top section nav (`About`, `Experience`, `Projects`) is center-anchored and position-stable; dynamic context ribbon text is rendered as an overlay below the nav so section buttons do not shift when selection context changes.
 
 ## 6) Content Editing Guide
 
