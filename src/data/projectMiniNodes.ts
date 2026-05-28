@@ -52,6 +52,14 @@ export const projectMiniNodes: ProjectMiniNode[] = [
     longitude: 119.6198,
   },
   {
+    id: "systems-orbit",
+    title: "Orbit",
+    subsection: "systems",
+    subsectionIndex: 3,
+    latitude: 14.8621,
+    longitude: 111.2198,
+  },
+  {
     id: "security-crypto-analysis",
     title: "Crypto Analysis",
     subsection: "security",
@@ -128,6 +136,27 @@ const projectMiniNodeProfiles: Record<string, ProjectMiniNodeProfile> = {
       "Handled secure session persistence across multi-step login and traversal paths.",
     ],
     impact: "Delivered a standards-focused crawler foundation for security-oriented web scanning.",
+    status: "Completed",
+  },
+  "systems-orbit": {
+    timeframe: "2026",
+    role: "Simulation / Systems Engineer",
+    stack: [
+      "C++20",
+      "Orbital Mechanics (RK4)",
+      "Protocol Buffers",
+      "UDP Telemetry",
+      "GoogleTest",
+      "CMake",
+    ],
+    highlights: [
+      "Implemented a deterministic, headless 60 Hz simulation loop in Earth-centered inertial (ECI) space with fixed-step RK4 integration and strict entity ordering.",
+      "Designed avionics-style flight-computer scheduling with subsystem power priorities, fuel/thrust stages, and optional actuation for isolated physics validation.",
+      "Built radar line-of-sight and field-of-view sensing, alpha-beta tracking, and time-to-intercept estimation for interceptor scenarios.",
+      "Added non-blocking telemetry and replay pipelines using a fixed-capacity SPSC queue, protobuf UDP packets, and ORBRPLY session recording for offline analysis.",
+    ],
+    impact:
+      "Delivered a reproducible simulation reference stack with CI-enforced deterministic hashes and sanitizer/Valgrind memory checks, enabling reliable regression validation of physics and systems behavior.",
     status: "Completed",
   },
   "security-crypto-analysis": {
