@@ -464,14 +464,14 @@ function ConnectorOverlay({
           </AnimatePresence>
           <motion.div
             key={selectedNode.id}
-            className="absolute h-[2px] rounded-full"
+            className="absolute h-[1.5px] rounded-full"
             style={{
               top: streamStartY,
               left: `${CONNECTOR_BAR_LEFT_PCT}%`,
               width: `${connectorBarWidthPct}%`,
               transformOrigin: "left center",
               backgroundColor: ACCENT_COLOR_HEX,
-              boxShadow: `0 0 6px ${colorToRgba(ACCENT_COLOR_HEX, 0.5)}, 0 0 14px ${colorToRgba(ACCENT_COLOR_HEX, 0.25)}`,
+              boxShadow: `0 0 5px ${colorToRgba(ACCENT_COLOR_HEX, 0.45)}, 0 0 11px ${colorToRgba(ACCENT_COLOR_HEX, 0.22)}`,
             }}
             initial={{ scaleX: 0, opacity: 0 }}
             animate={{ scaleX: showConnectorLine ? 1 : 0, opacity: showConnectorLine ? 1 : 0 }}
@@ -619,7 +619,14 @@ export function GlobeExperience() {
     selectedNode !== null &&
     sceneMode === "focused" &&
     connectorPathsActive;
+  /** Main UI connector always targets the section hub; project subpins use MiniNodeSignalLink on the globe. */
   const connectorTargetLatLon = useMemo(() => {
+    if (isProjectsSelected && projectsNode) {
+      return {
+        latitude: projectsNode.latitude,
+        longitude: projectsNode.longitude,
+      };
+    }
     if (selectedNode) {
       return {
         latitude: selectedNode.latitude,
@@ -627,7 +634,7 @@ export function GlobeExperience() {
       };
     }
     return { latitude: null, longitude: null };
-  }, [selectedNode]);
+  }, [isProjectsSelected, projectsNode, selectedNode]);
   /** Lower % = higher on screen. Pin latitude when panel anchor is not yet measured. */
   const connectorTargetLatitude = connectorTargetLatLon.latitude;
   const pinStreamStartYPercent =
@@ -711,15 +718,12 @@ export function GlobeExperience() {
       setConnectorPathsActive(false);
       setSelectedNode(projectsNode);
       setSceneMode("focusing");
-    } else {
-      setSceneMode("focusing");
     }
     setActiveProjectMiniNodeId(miniNodeId);
   };
 
   const onClearProjectSelection = () => {
     setActiveProjectMiniNodeId(null);
-    setSceneMode("focusing");
   };
 
   const onStepProject = (delta: -1 | 1) => {

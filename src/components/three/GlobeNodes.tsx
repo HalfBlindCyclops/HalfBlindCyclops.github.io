@@ -574,8 +574,8 @@ function MiniNodeSignalLink({
           points={pathPoints}
           color={pulseColor}
           transparent
-          opacity={0.38}
-          lineWidth={4.6}
+          opacity={0.32}
+          lineWidth={2.8}
           depthWrite={false}
         />
       ) : null}
@@ -585,7 +585,7 @@ function MiniNodeSignalLink({
         color={pulseColor}
         transparent
         opacity={lineBaseOpacity}
-        lineWidth={isActive ? 3.1 : 0.95}
+        lineWidth={isActive ? 2.15 : 0.95}
         depthWrite={false}
       />
       <mesh ref={pulseARef} raycast={() => null}>

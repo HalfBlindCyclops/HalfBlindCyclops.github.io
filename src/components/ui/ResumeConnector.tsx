@@ -92,7 +92,8 @@ const RF_PACKET_RIPPLE_MIX = 0.58;
 const RF_LAYER_MULTIPATH_GAIN = 1.22;
 const RF_CHAOS_GAIN = 1.45;
 
-const RF_LINK_STROKE_WIDTH = 2.35;
+/** Slightly thinner than before; still reads above sat link width (0.95 in OrbitalSatellites). */
+const RF_LINK_STROKE_WIDTH = 1.65;
 
 const PACKET_TRAVEL_SEC = 1.25;
 
