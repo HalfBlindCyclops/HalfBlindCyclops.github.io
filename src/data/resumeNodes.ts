@@ -84,10 +84,10 @@ export const resumeNodes: ResumeNode[] = [
         "Dev Exchange — Full-Stack Contributor (Nov 2025 – Jan 2026): technical expertise exchange platform; visual identity and front-end.",
       ],
       systems: [
+        "Spacecraft Simulation Engine (C++20 deterministic orbital mechanics simulator): built a headless 60 Hz spacecraft simulation engine in ECI space with RK4 integration, avionics-style flight-computer resource scheduling, radar/track pipelines, asynchronous UDP protobuf telemetry, replay recording, and CI-enforced determinism plus memory-safety checks.",
         "Distributed Hash Map (Rust): built a fault-tolerant key-value store over a dynamic peer-to-peer cluster using consistent hashing on a 32-bit ring, 50 virtual nodes per machine, and N=3 replication (primary plus two replicas). Implemented server-side forwarding, failure-aware read paths, versioned tombstones, and repair loops (hinted handoff replay, read-repair, anti-entropy, tombstone GC) to preserve availability and convergence during failures and rejoin events. Secured all RPC traffic with TLS/mTLS and added reproducible cluster evaluation scripts for end-to-end routing, fault tolerance, and security validation.",
         "Memory corruption & binary exploitation (hardened Linux / warhead): buffer-overflow payloads to hijack control flow and reach arbitrary code execution; stack frames, return addresses, and bypasses for modern OS protections.",
         "Custom Secure Web Crawler (Python stdlib): HTTP/HTTPS crawler without requests or BeautifulSoup—manual TLS handshakes, chunked transfer parsing, session persistence, and CSRF-aware authenticated navigation.",
-        "Orbit (C++20 deterministic orbital mechanics simulator): built a headless 60 Hz spacecraft simulation engine in ECI space with RK4 integration, avionics-style flight-computer resource scheduling, radar/track pipelines, asynchronous UDP protobuf telemetry, replay recording, and CI-enforced determinism plus memory-safety checks.",
       ],
       security: [
         "Cryptographic protocol analysis & noise recovery: reverse-engineered custom or proprietary crypto protocols, applied noise-recovery techniques, and broke non-trivial encrypted channels to validate weaknesses in real implementations.",

@@ -22,7 +22,6 @@ import { motionDuration, motionEase, motionStagger } from "@/lib/motion";
 import {
   SURFACE_INSET,
   SURFACE_PILL_BUTTON,
-  SURFACE_SECTION_HEADER,
   SURFACE_SHELL_LIGHT,
 } from "@/lib/uiSurfaces";
 /** Viewport-relative top-left of the resume panel (for connector alignment). */
@@ -162,26 +161,6 @@ function StructuredBullet({
     </motion.li>
   );
 }
-
-const PROJECT_SUBSECTION_LABELS: Record<keyof ResumeProjectSubsections, string> = {
-  webDev: "Web dev",
-  systems: "Systems",
-  security: "Security",
-  others: "Others",
-};
-
-const PROJECT_SUBSECTION_ORDER: (keyof ResumeProjectSubsections)[] = [
-  "webDev",
-  "systems",
-  "security",
-  "others",
-];
-
-const PROJECT_GROUPS = PROJECT_SUBSECTION_ORDER.map((key) => ({
-  key,
-  title: PROJECT_SUBSECTION_LABELS[key],
-  nodes: projectMiniNodes.filter((node) => node.subsection === key),
-})).filter((group) => group.nodes.length > 0);
 
 /** Down chevron at bottom of Projects when content extends below the fold. */
 function ProjectsScrollDownCue() {
@@ -404,10 +383,7 @@ function ProjectsMasterDetail({
   breadcrumb?: string;
 }) {
   const hasSelection = projectDetail !== null;
-  const projectOrder = useMemo(
-    () => PROJECT_GROUPS.flatMap((group) => group.nodes.map((node) => node.id)),
-    [],
-  );
+  const projectOrder = useMemo(() => projectMiniNodes.map((node) => node.id), []);
   const indexMap = useMemo(
     () => new Map(projectOrder.map((id, idx) => [id, idx])),
     [projectOrder],
@@ -449,29 +425,20 @@ function ProjectsMasterDetail({
         }
         aria-label="Project list"
       >
-        <div className="space-y-6">
-          {PROJECT_GROUPS.map((group) => (
-            <section key={group.key}>
-              <h3 className={SURFACE_SECTION_HEADER}>
-                {group.title}
-              </h3>
-              <ul className="mt-2 space-y-2">
-                {group.nodes.map((node) => (
-                  <li key={node.id}>
-                    {onSelectProjectMiniNode ? (
-                      <ProjectIndexButton
-                        node={node}
-                        isActive={activeProjectMiniNodeId === node.id}
-                        onSelect={() => onSelectProjectMiniNode(node.id)}
-                        onKeyDown={(event) => handleProjectButtonKeyDown(event, node.id)}
-                      />
-                    ) : null}
-                  </li>
-                ))}
-              </ul>
-            </section>
+        <ul className="space-y-2">
+          {projectMiniNodes.map((node) => (
+            <li key={node.id}>
+              {onSelectProjectMiniNode ? (
+                <ProjectIndexButton
+                  node={node}
+                  isActive={activeProjectMiniNodeId === node.id}
+                  onSelect={() => onSelectProjectMiniNode(node.id)}
+                  onKeyDown={(event) => handleProjectButtonKeyDown(event, node.id)}
+                />
+              ) : null}
+            </li>
           ))}
-        </div>
+        </ul>
       </nav>
       <div className="min-h-0 min-w-0 flex-1 md:overflow-y-auto md:overscroll-y-contain">
         {hasSelection && projectDetail ? (

@@ -81,13 +81,6 @@ type MiniDetailInfo = {
   }>;
 };
 
-const PROJECT_SUBSECTION_LABELS = {
-  webDev: "Web dev",
-  systems: "Systems",
-  security: "Security",
-  others: "Other",
-} as const;
-
 const CONNECTOR_ANCHOR_HIDDEN_KEY = "__hidden__";
 const ProfileContactHub = dynamic(
   () => import("@/components/ui/ProfileContactHub").then((m) => m.ProfileContactHub),
@@ -593,8 +586,7 @@ export function GlobeExperience() {
       : undefined;
   const projectBreadcrumb = useMemo(() => {
     if (!isProjectsSelected || !activeProjectMiniNode) return null;
-    const subsectionLabel = PROJECT_SUBSECTION_LABELS[activeProjectMiniNode.subsection] ?? "Project";
-    return `Projects / ${subsectionLabel} / ${activeProjectMiniNode.title}`;
+    return `Projects / ${activeProjectMiniNode.title}`;
   }, [activeProjectMiniNode, isProjectsSelected]);
   const contextRibbon = useMemo(() => {
     if (!selectedNode) return null;

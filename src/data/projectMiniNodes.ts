@@ -28,10 +28,18 @@ export type ProjectMiniNodeProfile = {
  */
 export const projectMiniNodes: ProjectMiniNode[] = [
   {
+    id: "systems-orbit",
+    title: "Spacecraft Simulation Engine",
+    subsection: "systems",
+    subsectionIndex: 0,
+    latitude: 14.8621,
+    longitude: 111.2198,
+  },
+  {
     id: "systems-wan-dht",
     title: "WAN DHT",
     subsection: "systems",
-    subsectionIndex: 0,
+    subsectionIndex: 1,
     latitude: 6.7521,
     longitude: 109.0198,
   },
@@ -39,25 +47,9 @@ export const projectMiniNodes: ProjectMiniNode[] = [
     id: "systems-binary-exploitation",
     title: "Binary Exploitation",
     subsection: "systems",
-    subsectionIndex: 1,
+    subsectionIndex: 2,
     latitude: 11.2321,
     longitude: 114.5198,
-  },
-  {
-    id: "systems-secure-crawler",
-    title: "Secure Web Crawler",
-    subsection: "systems",
-    subsectionIndex: 2,
-    latitude: 4.1821,
-    longitude: 119.6198,
-  },
-  {
-    id: "systems-orbit",
-    title: "Orbit",
-    subsection: "systems",
-    subsectionIndex: 3,
-    latitude: 14.8621,
-    longitude: 111.2198,
   },
   {
     id: "security-crypto-analysis",
@@ -74,6 +66,14 @@ export const projectMiniNodes: ProjectMiniNode[] = [
     subsectionIndex: 1,
     latitude: 8.9021,
     longitude: 116.7198,
+  },
+  {
+    id: "systems-secure-crawler",
+    title: "Secure Web Crawler",
+    subsection: "systems",
+    subsectionIndex: 3,
+    latitude: 4.1821,
+    longitude: 119.6198,
   },
   {
     id: "webdev-ai-curriculum-mapper",
