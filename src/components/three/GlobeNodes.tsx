@@ -574,8 +574,8 @@ function MiniNodeSignalLink({
           points={pathPoints}
           color={pulseColor}
           transparent
-          opacity={0.3}
-          lineWidth={3.8}
+          opacity={0.38}
+          lineWidth={4.6}
           depthWrite={false}
         />
       ) : null}
@@ -585,7 +585,7 @@ function MiniNodeSignalLink({
         color={pulseColor}
         transparent
         opacity={lineBaseOpacity}
-        lineWidth={isActive ? 2.45 : 0.95}
+        lineWidth={isActive ? 3.1 : 0.95}
         depthWrite={false}
       />
       <mesh ref={pulseARef} raycast={() => null}>
@@ -730,10 +730,10 @@ export function GlobeNodes({
         ? projectMiniNodes.map((miniNode) => (
             <MiniNodeSignalLink
               key={`${miniNode.id}-link`}
-              fromLatitude={miniNode.latitude}
-              fromLongitude={miniNode.longitude}
-              toLatitude={projectsNode.latitude}
-              toLongitude={projectsNode.longitude}
+              fromLatitude={projectsNode.latitude}
+              fromLongitude={projectsNode.longitude}
+              toLatitude={miniNode.latitude}
+              toLongitude={miniNode.longitude}
               accentColor={miniAccent}
               reducedMotion={reducedMotion}
               isActive={activeProjectMiniNodeId === miniNode.id}

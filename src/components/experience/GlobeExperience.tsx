@@ -620,12 +620,6 @@ export function GlobeExperience() {
     sceneMode === "focused" &&
     connectorPathsActive;
   const connectorTargetLatLon = useMemo(() => {
-    if (isProjectsSelected && activeProjectMiniNode) {
-      return {
-        latitude: activeProjectMiniNode.latitude,
-        longitude: activeProjectMiniNode.longitude,
-      };
-    }
     if (selectedNode) {
       return {
         latitude: selectedNode.latitude,
@@ -633,11 +627,7 @@ export function GlobeExperience() {
       };
     }
     return { latitude: null, longitude: null };
-  }, [
-    activeProjectMiniNode,
-    isProjectsSelected,
-    selectedNode,
-  ]);
+  }, [selectedNode]);
   /** Lower % = higher on screen. Pin latitude when panel anchor is not yet measured. */
   const connectorTargetLatitude = connectorTargetLatLon.latitude;
   const pinStreamStartYPercent =
