@@ -125,7 +125,7 @@ function InteractiveRow({
         <>
           <a
             href={contact.openHref}
-            download
+            download="Sean_Wetherell_Resume.pdf"
             className={buttonClass}
             title="Download resume"
             aria-label="Download resume"

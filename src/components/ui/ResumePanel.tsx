@@ -382,6 +382,7 @@ function ProjectsMasterDetail({
   projectNavPosition?: { current: number; total: number };
   breadcrumb?: string;
 }) {
+  const projectListRef = useRef<HTMLElement>(null);
   const hasSelection = projectDetail !== null;
   const projectOrder = useMemo(() => projectMiniNodes.map((node) => node.id), []);
   const indexMap = useMemo(
@@ -415,13 +416,38 @@ function ProjectsMasterDetail({
     [focusProjectAt, indexMap, projectOrder.length],
   );
 
+  useLayoutEffect(() => {
+    if (!hasSelection || !activeProjectMiniNodeId) return;
+    const host = projectListRef.current;
+    if (!host) return;
+    const target = host.querySelector<HTMLElement>(
+      `[data-project-id="${activeProjectMiniNodeId}"]`,
+    );
+    if (!target) return;
+    requestAnimationFrame(() => {
+      target.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    });
+  }, [activeProjectMiniNodeId, hasSelection]);
+
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4 md:flex-row md:gap-6">
+    <div
+      className={
+        hasSelection
+          ? "flex min-h-0 flex-1 flex-col gap-4 md:h-full md:flex-row md:gap-6"
+          : "flex min-h-0 flex-1 flex-col gap-4 md:flex-row md:gap-6"
+      }
+    >
       <nav
+        ref={projectListRef}
         className={
           hasSelection
-            ? "min-h-0 shrink-0 md:max-h-full md:w-[12.5rem] md:overflow-y-auto md:overscroll-y-contain md:pr-1"
+            ? "min-h-0 shrink-0 overflow-y-auto overscroll-y-contain resume-panel-scroll-accent max-h-[min(40vh,20rem)] pr-1 md:max-h-none md:h-full md:w-[12.5rem]"
             : "min-h-0 shrink-0"
+        }
+        style={
+          hasSelection
+            ? ({ ["--resume-scroll-thumb" as string]: ACCENT_COLOR_HEX } as CSSProperties)
+            : undefined
         }
         aria-label="Project list"
       >
@@ -440,7 +466,18 @@ function ProjectsMasterDetail({
           ))}
         </ul>
       </nav>
-      <div className="min-h-0 min-w-0 flex-1 md:overflow-y-auto md:overscroll-y-contain">
+      <div
+        className={
+          hasSelection
+            ? "min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-y-contain resume-panel-scroll-accent md:h-full"
+            : "min-h-0 min-w-0 flex-1 md:overflow-y-auto md:overscroll-y-contain"
+        }
+        style={
+          hasSelection
+            ? ({ ["--resume-scroll-thumb" as string]: ACCENT_COLOR_HEX } as CSSProperties)
+            : undefined
+        }
+      >
         {hasSelection && projectDetail ? (
           <ProjectDetailView
             detail={projectDetail}
@@ -572,7 +609,7 @@ export function ResumePanel({
     }
     const canScroll = el.scrollHeight > Math.ceil(el.clientHeight);
     setHasVerticalScroll(canScroll);
-    if (node?.id === "projects" && canScroll) {
+    if (node?.id === "projects" && canScroll && !projectDetail) {
       const threshold = 16;
       const atBottom =
         el.scrollTop + el.clientHeight >= el.scrollHeight - threshold;
@@ -580,7 +617,7 @@ export function ResumePanel({
     } else {
       setShowProjectsScrollCue(false);
     }
-  }, [node?.id]);
+  }, [node?.id, projectDetail]);
 
   useLayoutEffect(() => {
     if (!node) {
@@ -660,19 +697,6 @@ export function ResumePanel({
     });
   }, [node, onDidScrollToBullet, scrollToBulletIndex]);
 
-  useLayoutEffect(() => {
-    if (!node || node.id !== "projects" || !activeProjectMiniNodeId) return;
-    const host = scrollBodyRef.current;
-    if (!host) return;
-    const target = host.querySelector<HTMLElement>(
-      `[data-project-id="${activeProjectMiniNodeId}"]`,
-    );
-    if (!target) return;
-    requestAnimationFrame(() => {
-      target.scrollIntoView({ behavior: "smooth", block: "nearest" });
-    });
-  }, [activeProjectMiniNodeId, node]);
-
   const splitTop = splitViewPanelTop ?? `calc(${streamStartY} + 1rem)`;
   const splitAnchored =
     Boolean(isSplitView && splitViewPanelLeft && splitViewPanelWidth);
@@ -690,9 +714,11 @@ export function ResumePanel({
       ? { right: "2.75rem", top: splitTop, maxHeight: splitMaxHeight }
       : undefined;
   const accentPanelShadow = `0 25px 50px -12px ${colorToRgba(ACCENT_COLOR_HEX, 0.12)}`;
-  const scrollBodyAccent: CSSProperties | undefined = hasVerticalScroll
-    ? { ["--resume-scroll-thumb" as string]: ACCENT_COLOR_HEX }
-    : undefined;
+  const isProjectsDetailView = node?.id === "projects" && projectDetail !== null;
+  const scrollBodyAccent: CSSProperties | undefined =
+    hasVerticalScroll && !isProjectsDetailView
+      ? { ["--resume-scroll-thumb" as string]: ACCENT_COLOR_HEX }
+      : undefined;
   const asideClass =
     `pointer-events-auto absolute z-50 flex flex-col overflow-hidden text-slate-100 min-h-0 ${SURFACE_SHELL_LIGHT} ` +
     "left-1/2 w-[min(92vw,30rem)] -translate-x-1/2 max-h-[min(calc(100dvh-6rem),90dvh)] p-[var(--surface-pad-md)] " +
@@ -714,9 +740,10 @@ export function ResumePanel({
       : { boxShadow: accentPanelShadow }),
   };
 
-  const scrollBodyClass =
-    "min-h-0 flex-1 overflow-y-auto overscroll-y-contain " +
-    (hasVerticalScroll ? "overflow-y-scroll resume-panel-scroll-accent " : "");
+  const scrollBodyClass = isProjectsDetailView
+    ? "flex min-h-0 flex-1 flex-col overflow-hidden"
+    : "min-h-0 flex-1 overflow-y-auto overscroll-y-contain " +
+      (hasVerticalScroll ? "overflow-y-scroll resume-panel-scroll-accent " : "");
   return (
     <AnimatePresence>
       {node && (
@@ -887,7 +914,7 @@ export function ResumePanel({
                 </div>
               ) : null}
             </div>
-            {node.id === "projects" && showProjectsScrollCue ? (
+            {node.id === "projects" && showProjectsScrollCue && !projectDetail ? (
               <div className="pointer-events-none absolute bottom-2 left-1/2 z-[3] -translate-x-1/2 md:bottom-3">
                 <ProjectsScrollDownCue />
               </div>
