@@ -730,10 +730,10 @@ export function GlobeNodes({
         ? projectMiniNodes.map((miniNode) => (
             <MiniNodeSignalLink
               key={`${miniNode.id}-link`}
-              fromLatitude={projectsNode.latitude}
-              fromLongitude={projectsNode.longitude}
-              toLatitude={miniNode.latitude}
-              toLongitude={miniNode.longitude}
+              fromLatitude={miniNode.latitude}
+              fromLongitude={miniNode.longitude}
+              toLatitude={projectsNode.latitude}
+              toLongitude={projectsNode.longitude}
               accentColor={miniAccent}
               reducedMotion={reducedMotion}
               isActive={activeProjectMiniNodeId === miniNode.id}
