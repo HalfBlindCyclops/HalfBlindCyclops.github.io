@@ -39,6 +39,7 @@ export const resumeNodes: ResumeNode[] = [
     bullets: [
       "People come first for me, relationships and teamwork are what I lean on most. I’m looking for a long-term team that cares about the same things I do.",
       "B.S. in Computer Science at Northeastern (Jan 2021 – May 2026), GPA 3.4. Coursework in algorithms, systems, networking, distributed systems, and security.",
+      "Deep experience with AI-assisted workflows and automation — daily use of tools like Claude, Cursor, and Gemini for software creation, code review, and analysis, integrating them into development and operations pipelines.",
       "Outside the keyboard: orbital mechanics, aerospace, and aviation. Northeastern Club Wrestling; former four-year Norwood High varsity wrestler.",
     ],
     links: [

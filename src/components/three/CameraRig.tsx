@@ -178,7 +178,8 @@ export function CameraRig({
     // Orbit drag: off only while camera lerps to a new pin ("focusing"); idle / returning / focused all allow rotate.
     controls.enableRotate = !sectionFramed || canWiggle;
     controls.enablePan = !sectionFramed;
-    controls.enableZoom = !sectionFramed;
+    // Zoom stays available while locked on a node; only disabled mid-flight to a new pin.
+    controls.enableZoom = !sectionFramed || canWiggle;
 
     let desiredPosition: Vector3;
 
@@ -229,9 +230,10 @@ export function CameraRig({
       if (reducedMotion) maxWiggle *= 0.65;
 
       // Pin wiggle around the framed orbit pivot; parallel transport of view direction from design target `t`.
-      const desiredDist = dfp.distanceTo(t);
       const idealDir = clampIdealDir.current.copy(dfp).sub(t).normalize();
       const pivot = controls.target;
+      // Preserve the user's zoomed distance instead of re-pinning to the framed distance.
+      const desiredDist = camera.position.distanceTo(pivot);
       const actualDir = clampActualDir.current.copy(camera.position).sub(pivot).normalize();
 
       let dot = idealDir.dot(actualDir);

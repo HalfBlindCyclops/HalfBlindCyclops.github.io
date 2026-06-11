@@ -70,68 +70,68 @@ type PlanePreset = {
 };
 
 const UNIQUE_CONSTELLATION_PRESET: PlanePreset[] = [
-  // Primary mid-inclination backbone plane.
+  // Near-equatorial low shell: tight, fast, mostly circular.
   {
     count: 4,
-    radius: 2.04,
-    speed: 0.0154,
-    inclinationDeg: 38,
-    yawDeg: -112,
+    radius: 1.92,
+    speed: 0.0162,
+    inclinationDeg: 12,
+    yawDeg: -140,
     phaseOffset: 0.14,
-    layer: "core",
-    eccentricityBase: 0.03,
-    eccentricityJitter: 0.014,
-    radiusJitter: 0.048,
-    inclinationJitter: 4.8,
-    yawJitter: 2.6,
+    layer: "inner",
+    eccentricityBase: 0.025,
+    eccentricityJitter: 0.016,
+    radiusJitter: 0.06,
+    inclinationJitter: 6.5,
+    yawJitter: 9,
     phaseJitterDeg: 3.6,
   },
-  // Secondary high-inclination plane for strong angle contrast.
+  // Mid-inclination backbone shell.
   {
     count: 4,
-    radius: 2.2,
-    speed: 0.0135,
-    inclinationDeg: 74,
-    yawDeg: -28,
+    radius: 2.22,
+    speed: 0.0136,
+    inclinationDeg: 49,
+    yawDeg: -35,
     phaseOffset: 0.72,
     layer: "core",
-    eccentricityBase: 0.05,
-    eccentricityJitter: 0.018,
-    radiusJitter: 0.056,
-    inclinationJitter: 5.4,
-    yawJitter: 2.8,
+    eccentricityBase: 0.06,
+    eccentricityJitter: 0.028,
+    radiusJitter: 0.085,
+    inclinationJitter: 8.5,
+    yawJitter: 11,
     phaseJitterDeg: 4.0,
   },
-  // Low-inclination counter plane to prevent "all polar" feel.
+  // Near-polar shell, noticeably higher and more eccentric.
   {
     count: 3,
-    radius: 2.34,
-    speed: 0.0128,
-    inclinationDeg: 18,
-    yawDeg: 58,
+    radius: 2.52,
+    speed: 0.0121,
+    inclinationDeg: 86,
+    yawDeg: 72,
     phaseOffset: 1.48,
     layer: "outer",
-    eccentricityBase: 0.07,
-    eccentricityJitter: 0.022,
-    radiusJitter: 0.066,
-    inclinationJitter: 5.8,
-    yawJitter: 3.1,
+    eccentricityBase: 0.12,
+    eccentricityJitter: 0.04,
+    radiusJitter: 0.1,
+    inclinationJitter: 7.5,
+    yawJitter: 12,
     phaseJitterDeg: 4.8,
   },
-  // Sparse relay/drifter plane for longer arcs and variety.
+  // High retrograde drifters: tilted past polar, swinging wide ellipses.
   {
     count: 2,
-    radius: 2.56,
-    speed: 0.0112,
-    inclinationDeg: 88,
-    yawDeg: 112,
+    radius: 2.86,
+    speed: 0.0102,
+    inclinationDeg: 138,
+    yawDeg: 158,
     phaseOffset: 2.08,
     layer: "drifter",
-    eccentricityBase: 0.11,
-    eccentricityJitter: 0.038,
-    radiusJitter: 0.082,
-    inclinationJitter: 7.2,
-    yawJitter: 3.8,
+    eccentricityBase: 0.2,
+    eccentricityJitter: 0.05,
+    radiusJitter: 0.13,
+    inclinationJitter: 10,
+    yawJitter: 16,
     phaseJitterDeg: 5.3,
   },
 ];
@@ -167,33 +167,33 @@ function seedSpreadAngles(prefix: string, count: number, minGapRad: number): num
 function buildUniqueSatelliteSpecs(): SatelliteSpec[] {
   const presets = UNIQUE_CONSTELLATION_PRESET;
   const planeCount = presets.length;
-  const planeYawSpanDeg = 180;
+  const planeYawSpanDeg = 360;
   const specs: SatelliteSpec[] = [];
   presets.forEach((plane, p) => {
     const phaseAngles = seedSpreadAngles(`constellation-plane-${p + 1}`, plane.count, 0.42);
     for (let s = 0; s < plane.count; s += 1) {
       const id = `constellation-p${p + 1}-s${s + 1}`;
-      // Keep constellation structure, but offset each satellite's plane slightly
+      // Keep constellation structure, but offset each satellite's plane noticeably
       // so they do not read like perfectly stacked coplanar rings.
       const slotBlend = plane.count <= 1 ? 0 : s / (plane.count - 1) - 0.5;
-      const microPlaneInclination = slotBlend * 8.2;
-      const microPlaneYaw = slotBlend * 6.2;
+      const microPlaneInclination = slotBlend * 14;
+      const microPlaneYaw = slotBlend * 24;
       const layerAltitudeSpread =
-        plane.layer === "drifter" ? 0.2 : plane.layer === "outer" ? 0.14 : plane.layer === "core" ? 0.1 : 0.08;
+        plane.layer === "drifter" ? 0.3 : plane.layer === "outer" ? 0.22 : plane.layer === "core" ? 0.16 : 0.12;
       const slotAltitudeOffset = slotBlend * layerAltitudeSpread;
       const planeAltitudeBias = Math.sin((p + 1) * 2.13) * 0.05;
       const planeBlend = planeCount <= 1 ? 0 : p / (planeCount - 1) - 0.5;
       const majorPlaneYaw = planeBlend * planeYawSpanDeg;
       const majorPlaneInclination = Math.sin((p + 1) * 1.37) * 7.8;
-      const nodalInclination = jitter(`${id}-nodal-inc`, 4.6);
-      const nodalYaw = jitter(`${id}-nodal-yaw`, 2.8);
+      const nodalInclination = jitter(`${id}-nodal-inc`, 7.5);
+      const nodalYaw = jitter(`${id}-nodal-yaw`, 9);
       const eccentricityDrift =
-        plane.layer === "drifter" ? jitter(`${id}-ecc-drift`, 0.02) : jitter(`${id}-ecc-drift`, 0.012);
+        plane.layer === "drifter" ? jitter(`${id}-ecc-drift`, 0.035) : jitter(`${id}-ecc-drift`, 0.02);
       const phaseDrift = ((jitter(`${id}-phase-drift`, 1) * Math.PI) / 180) * 1.2;
       specs.push({
         id,
         radius: plane.radius + planeAltitudeBias + slotAltitudeOffset + jitter(`${id}-r`, plane.radiusJitter),
-        speed: plane.speed + jitter(`${id}-speed`, plane.layer === "drifter" ? 0.0009 : 0.0006),
+        speed: plane.speed + jitter(`${id}-speed`, plane.layer === "drifter" ? 0.0013 : 0.0009),
         phase:
           phaseAngles[s] +
           plane.phaseOffset +
@@ -223,10 +223,10 @@ function buildUniqueSatelliteSpecs(): SatelliteSpec[] {
     }
   });
 
-  // Ensure a clear inclination spread: every satellite is at least 10deg apart.
-  const MIN_INCLINATION_GAP_DEG = 10;
-  const MIN_INCLINATION_DEG = 4;
-  const MAX_INCLINATION_DEG = 176;
+  // Ensure a clear inclination spread: every satellite is at least 12deg apart.
+  const MIN_INCLINATION_GAP_DEG = 12;
+  const MIN_INCLINATION_DEG = 5;
+  const MAX_INCLINATION_DEG = 175;
   const sorted = specs
     .map((spec, index) => ({ index, inclinationDeg: spec.inclinationDeg }))
     .sort((a, b) => a.inclinationDeg - b.inclinationDeg);
@@ -1199,13 +1199,15 @@ export function OrbitalSatellites({
         .copy(orbitAheadSampleRef.current)
         .sub(satPositionRefs[i].current)
         .normalize();
+      const isActiveSat = activeSatIndicesRef.current.has(i);
       const satMesh = satMeshRefs.current[i];
       if (satMesh) {
+        // Hide the satellite body entirely when it is not part of the active network.
+        satMesh.visible = isActiveSat;
         satMesh.position.copy(satPositionRefs[i].current);
         // ConeGeometry points up +Y by default; rotate it to follow orbit tangent.
         satMesh.quaternion.setFromUnitVectors(UP_AXIS, orbitDirectionRef.current);
-        const isActiveSat = activeSatIndicesRef.current.has(i);
-        const pulseAmp = reducedMotion ? 0.012 : isActiveSat ? 0.085 : 0.045;
+        const pulseAmp = reducedMotion ? 0.012 : 0.085;
         const pulse = 1 + Math.sin(t * 2.9 + spec.phase) * pulseAmp;
         satMesh.scale.setScalar(pulse);
       }
@@ -1219,8 +1221,8 @@ export function OrbitalSatellites({
       );
       const tickLine = motionTickLineRefs.current[i];
       if (tickLine?.material) {
-        tickLine.material.opacity = lowQualityTier ? 0.08 : 0.14;
-        tickLine.material.linewidth = lowQualityTier ? 0.18 : 0.34;
+        tickLine.material.opacity = !isActiveSat ? 0 : lowQualityTier ? 0.08 : 0.14;
+        tickLine.material.linewidth = !isActiveSat ? 0 : lowQualityTier ? 0.18 : 0.34;
       }
     });
 

@@ -64,21 +64,26 @@ const cloudFragmentShader = `
 
   float fbm(vec3 p) {
     float s = 0.0;
-    float a = 0.52;
-    for (int i = 0; i < 4; i++) {
+    float a = 0.5;
+    for (int i = 0; i < 5; i++) {
       s += a * vnoise(p);
-      p *= 2.02;
-      a *= 0.5;
+      p = p * 2.17 + vec3(13.7, 5.1, 9.3);
+      a *= 0.52;
     }
     return s;
   }
 
-  float regionalMask(vec3 p) {
-    // Create continent/ocean-scale isolated weather regions.
-    float basinA = smoothstep(0.46, 0.78, fbm(p * 0.56 + vec3(14.0, 22.0, -11.0)));
-    float basinB = smoothstep(0.52, 0.82, fbm(p * 0.62 + vec3(-30.0, 7.0, 18.0)));
-    float basinC = smoothstep(0.48, 0.8, fbm(p * 0.58 + vec3(41.0, -16.0, 6.0)));
-    return clamp(max(max(basinA, basinB), basinC), 0.0, 1.0);
+  // Ridged variant: produces thin streaky filaments for cirrus.
+  float ridgedFbm(vec3 p) {
+    float s = 0.0;
+    float a = 0.58;
+    for (int i = 0; i < 4; i++) {
+      float n = 1.0 - abs(2.0 * vnoise(p) - 1.0);
+      s += a * n * n;
+      p = p * 2.31 + vec3(4.2, 8.8, 2.9);
+      a *= 0.5;
+    }
+    return s;
   }
 
   float cycloneCell(vec3 p, vec3 center, float armCount, float spinRate, float seed) {
@@ -87,17 +92,38 @@ const cloudFragmentShader = `
     vec3 basisY = normalize(cross(center, basisX));
     vec2 uv = vec2(dot(p, basisX), dot(p, basisY));
     float r = length(uv);
+    if (r > 0.2) return 0.0;
     float ang = atan(uv.y, uv.x);
 
-    float eyeWall = smoothstep(0.24, 0.03, r);
-    float outerFalloff = smoothstep(0.55, 0.08, r);
-    float spiralPhase = ang * armCount - r * 30.0 + uTime * spinRate + seed;
-    float spiral = 0.5 + 0.5 * sin(spiralPhase);
-    float banded = smoothstep(0.5, 0.86, spiral);
-    float turbulence = smoothstep(0.36, 0.82, fbm(p * 8.5 + vec3(seed, seed * 0.7, -seed * 0.4)));
+    // Noise-jittered polar coords so nothing about the storm is geometric.
+    float n1 = fbm(p * 16.0 + vec3(seed, -seed * 0.6, seed * 0.3));
+    float n2 = fbm(p * 34.0 + vec3(-seed * 0.4, seed, seed * 0.8));
+    float rj = r * (1.0 + (n1 - 0.5) * 0.5);
+    float angj = ang + (n1 - 0.5) * 1.4;
 
-    float cell = max(eyeWall * (0.6 + 0.4 * banded), banded * outerFalloff * turbulence);
-    return clamp(cell, 0.0, 1.0);
+    // Differential rotation: inner bands spin visibly faster than the outskirts.
+    float spin = uTime * spinRate * (0.55 + 1.1 / (1.0 + rj * 30.0));
+
+    // Logarithmic spiral: arms wind tightly into the core like a real hurricane.
+    float spiralPhase = angj * armCount - log(max(rj, 0.004)) * 5.0 + spin + seed;
+    float spiral = 0.5 + 0.5 * sin(spiralPhase);
+    // Rainbands grow wider and softer with distance from the eye.
+    float armWidth = mix(0.78, 0.45, smoothstep(0.02, 0.16, rj));
+    float arms = smoothstep(armWidth - 0.22, armWidth + 0.18, spiral);
+    // Arms are made of broken convective clumps, not continuous ribbons.
+    arms *= smoothstep(0.2, 0.68, n2);
+
+    // Solid central dense overcast with a small clear eye punched out.
+    float eyeHole = smoothstep(0.006, 0.018, rj);
+    float core = smoothstep(0.075, 0.02, rj) * (0.85 + 0.15 * n2);
+    // Rainbands fade out quickly; storm stays compact.
+    float bandFalloff = smoothstep(0.19, 0.05, rj);
+    // Faint high-altitude outflow shield (cirrus canopy) hazing the whole system.
+    float canopy = smoothstep(0.17, 0.04, rj) * (0.18 + 0.14 * n1);
+
+    float cell = max(core * (0.85 + 0.15 * arms), arms * bandFalloff);
+    cell = max(cell, canopy);
+    return clamp(cell * eyeHole, 0.0, 1.0);
   }
 
   void main() {
@@ -106,24 +132,51 @@ const cloudFragmentShader = `
     vec3 P = normalize(vWorldPos);
     vec3 V = normalize(cameraPosition - vWorldPos);
 
-    vec3 drift = vec3(uTime * 0.012, uTime * 0.008, uTime * 0.005);
-    vec3 q = P * 2.85 + drift;
-    vec3 qLarge = P * 1.55 + drift * 0.42;
+    float lat = P.y;
+    float absLat = abs(lat);
 
-    float coarse = fbm(q);
-    float detail = fbm(q * 2.6 + vec3(19.2, 8.1, 33.7));
-    float micro = fbm(q * 5.4 + vec3(-9.0, 31.0, 17.0));
-    float stormBand = fbm(q * 0.88 + vec3(200.0, 50.0, 10.0));
-    stormBand = smoothstep(0.58, 0.92, stormBand);
-    float region = regionalMask(qLarge);
-    float filament = smoothstep(0.53, 0.78, fbm(q * 1.9 + vec3(5.0, -13.0, 22.0)));
-    float frontalNoise = smoothstep(0.54, 0.82, fbm(q * 3.2 + vec3(-25.0, 11.0, 9.0)));
+    vec3 drift = vec3(uTime * 0.014, uTime * 0.005, uTime * 0.0085);
+    // Slow churn vector: morphs cloud shapes over time instead of pure translation.
+    vec3 churn = vec3(sin(uTime * 0.021), cos(uTime * 0.016), sin(uTime * 0.013)) * 0.16;
 
-    float lat = abs(P.y);
-    float polarFade = smoothstep(0.84, 0.99, lat);
-    float latMask = mix(1.0, 0.38, polarFade);
-    float tropicalMask = smoothstep(0.74, 0.16, lat);
-    float midLatitudeMask = smoothstep(0.08, 0.62, lat) * (1.0 - smoothstep(0.62, 0.88, lat));
+    // Compress latitude in the sample domain so features stretch east-west,
+    // reading as zonal weather systems instead of round blobs.
+    vec3 Pz = vec3(P.x, P.y * 1.85, P.z);
+
+    // Domain warp bends cloud masses into fronts, hooks, and filaments.
+    vec3 q0 = Pz * 3.4 + drift;
+    vec3 warp = vec3(
+      fbm(q0 * 0.7 + vec3(11.3, 4.7, 21.9)),
+      fbm(q0 * 0.7 + vec3(31.4, 15.9, 2.6)),
+      fbm(q0 * 0.7 + vec3(7.1, 27.2, 12.5))
+    ) - vec3(0.5);
+    vec3 q = q0 + warp * 1.5;
+
+    float base = fbm(q);
+    float mid = fbm(q * 2.45 + vec3(19.2, 8.1, 33.7) + churn);
+    float fine = fbm(q * 6.1 + vec3(-9.0, 31.0, 17.0) + churn * 1.7);
+    float wisp = ridgedFbm(vec3(P.x, P.y * 2.7, P.z) * 2.2 + drift * 1.5 + warp * 0.7 + churn * 0.6);
+
+    // Continent-scale modulation so systems stay discrete with real clear gaps.
+    float region = smoothstep(0.36, 0.66, fbm(Pz * 0.85 + drift * 0.35 + vec3(41.0, -16.0, 6.0)));
+
+    float polarFade = smoothstep(0.8, 0.97, absLat);
+    float latMask = mix(1.0, 0.45, polarFade);
+    float tropicalMask = smoothstep(0.62, 0.1, absLat);
+    float midLatitudeMask = smoothstep(0.12, 0.42, absLat) * (1.0 - smoothstep(0.6, 0.86, absLat));
+    // Convective band hugging the equator (ITCZ), clearer subtropics either side.
+    float itczBand = exp(-pow(lat * 7.0, 2.0));
+    float belts = clamp(midLatitudeMask * 0.95 + itczBand * 1.1 + 0.28, 0.0, 1.0);
+
+    // Broken coverage: high threshold keeps most of the sphere clear.
+    float coverage = smoothstep(0.5, 0.74, base * (0.74 + 0.26 * region));
+    coverage *= belts * latMask;
+
+    float dens = coverage;
+    dens *= 0.4 + 0.6 * smoothstep(0.3, 0.78, mid);
+    dens *= 0.55 + 0.45 * smoothstep(0.22, 0.82, fine);
+    // Erode edges with fine noise so boundaries turn ragged, not airbrushed.
+    dens = clamp(dens * 1.4 - 0.24 * (1.0 - smoothstep(0.2, 0.7, fine)), 0.0, 1.0);
 
     vec3 stormCenterA = normalize(vec3(
       sin(uTime * 0.022 + 0.8),
@@ -135,54 +188,37 @@ const cloudFragmentShader = `
       -0.16 + 0.07 * sin(uTime * 0.013 + 1.8),
       sin(uTime * 0.024 + 3.1)
     ));
-    vec3 stormCenterC = normalize(vec3(
-      sin(uTime * 0.026 + 4.2),
-      0.06 + 0.06 * cos(uTime * 0.014 + 2.3),
-      cos(uTime * 0.019 + 5.0)
-    ));
     float cycloneA = cycloneCell(P, stormCenterA, 5.0, 1.0, 11.0);
     float cycloneB = cycloneCell(P, stormCenterB, 4.0, -0.85, 37.0);
-    float cycloneC = cycloneCell(P, stormCenterC, 6.0, 0.7, 71.0);
-    float cycloneField = max(max(cycloneA, cycloneB), cycloneC) * tropicalMask;
-    float frontalBands = frontalNoise * midLatitudeMask * (0.45 + 0.55 * region);
-    float severeStorm = clamp(max(stormBand, cycloneField * 0.95), 0.0, 1.0);
+    float cycloneField = max(cycloneA, cycloneB) * tropicalMask;
+    dens = max(dens, cycloneField * (0.8 + 0.2 * fine));
 
-    float coverage = smoothstep(0.16, 0.52, coarse);
-    float dens =
-      coverage *
-      (0.3 + 0.7 * smoothstep(0.24, 0.78, detail)) *
-      (0.55 + 0.45 * smoothstep(0.28, 0.82, micro)) *
-      (0.22 + 0.78 * region) *
-      (0.76 + 0.24 * filament) *
-      latMask *
-      (1.0 - 0.18 * severeStorm);
-    dens += cycloneField * (0.2 + 0.15 * detail);
-    dens += frontalBands * 0.12;
+    // Thin high-altitude cirrus streaks fill some clear sky with faint detail.
+    float cirrus = smoothstep(0.62, 0.9, wisp) * (1.0 - dens) * latMask * (0.4 + 0.6 * region);
 
-    dens = pow(clamp(dens, 0.0, 1.0), 0.9);
+    // Hurricanes read bright white from space; only tint the deepest frontal cores gray.
+    float severeStorm = clamp(smoothstep(0.78, 0.97, dens) * 0.6 - cycloneField * 0.4, 0.0, 1.0);
 
     float ndl = dot(N, L);
     float day = smoothstep(-0.14, 0.26, ndl);
-    float night = 1.0 - day;
     float twilight = smoothstep(-0.38, 0.06, ndl) * (1.0 - day);
 
     float sunWrap = clamp(ndl * 0.55 + 0.45, 0.0, 1.0);
     vec3 lit = mix(cloudShadow, cloudBright, day * (0.38 + 0.62 * sunWrap));
-    lit = mix(lit, cloudStorm, severeStorm * 0.58 + frontalBands * 0.18);
+    lit = mix(lit, cloudStorm, severeStorm * 0.5);
+    // Self-shadowing in thick cores adds volume.
+    lit *= 1.0 - 0.2 * smoothstep(0.45, 0.95, dens) * day;
     lit += vec3(0.1, 0.12, 0.18) * twilight * dens;
 
     float silver = pow(1.0 - max(dot(N, V), 0.0), 3.2);
     lit += vec3(0.14, 0.16, 0.2) * silver * (0.45 + 0.55 * day) * dens * 0.85;
 
-    float alpha =
-      dens *
-      (0.24 + 0.36 * day + 0.24 * night + 0.14 * twilight) *
-      (1.0 - 0.16 * severeStorm);
-    float baseCloudAlpha = smoothstep(0.26, 0.62, coarse) * 0.22 * latMask;
-    baseCloudAlpha += cycloneField * 0.08;
-    alpha = max(alpha, baseCloudAlpha);
-    alpha = clamp(alpha, 0.0, 0.78);
-    alpha *= smoothstep(0.0, 0.05, dens);
+    // Lift mid densities so cloud bodies read solid instead of translucent haze.
+    float alphaDens = pow(dens, 0.78);
+    float alpha = alphaDens * (0.62 + 0.28 * day + 0.14 * twilight);
+    alpha += cirrus * (0.2 + 0.12 * day);
+    alpha = clamp(alpha, 0.0, 0.95);
+    alpha *= smoothstep(0.012, 0.06, dens + cirrus);
 
     gl_FragColor = vec4(lit, alpha);
   }

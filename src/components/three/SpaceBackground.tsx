@@ -230,7 +230,7 @@ function SunMoonLayer({ sunDirection }: { sunDirection: [number, number, number]
           blending={AdditiveBlending}
         />
       </sprite>
-      <sprite position={moonPos.toArray()} scale={[3.5, 3.5, 1]}>
+      <sprite position={moonPos.toArray()} scale={[1.17, 1.17, 1]}>
         <spriteMaterial
           map={moonTexture}
           alphaMap={moonMaskTexture}
@@ -242,7 +242,7 @@ function SunMoonLayer({ sunDirection }: { sunDirection: [number, number, number]
           opacity={0.74}
         />
       </sprite>
-      <sprite position={moonPos.toArray()} scale={[3.52, 3.52, 1]}>
+      <sprite position={moonPos.toArray()} scale={[1.18, 1.18, 1]}>
         <spriteMaterial
           map={moonCrescentShadowTexture}
           alphaMap={moonMaskTexture}
