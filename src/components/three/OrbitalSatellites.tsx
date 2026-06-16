@@ -1121,8 +1121,10 @@ export function OrbitalSatellites({
     [satelliteLinks],
   );
   const accent = useMemo(() => new Color().setStyle(accentColor), [accentColor]);
+  // Comms lines (sat-to-ground + inter-sat links) stay blue; orbit tracks go green
+  // so the two are easy to tell apart.
   const signalColor = useMemo(() => new Color("#38bdf8"), []);
-  const orbitTrackColor = useMemo(() => new Color("#38bdf8"), []);
+  const orbitTrackColor = useMemo(() => new Color("#34d399"), []);
   const inactiveOrbitTrackColor = useMemo(() => orbitTrackColor.clone(), [orbitTrackColor]);
   const lowQualityTier = useMemo(() => {
     if (reducedMotion || isMobile) return true;
@@ -1594,12 +1596,12 @@ export function OrbitalSatellites({
             alwaysVisible
             straight
             depthOcclude
-            microwaveStyle
-            signalOpacity={0.34}
-            signalLineWidth={0.95}
-            rfOpacity={0.58}
-            rfLineWidth={0.95}
-            linkKey={`${spec.id}-${anchorKey}-node-link`}
+          microwaveStyle
+          signalOpacity={0.34}
+          signalLineWidth={0.95}
+          rfOpacity={0.58}
+          rfLineWidth={0.95}
+          linkKey={`${spec.id}-${anchorKey}-node-link`}
             activeLinkKeysRef={activeNodeLinkKeysRef}
             activeNoiseLinkKeysRef={activePathNoiseLinkKeysRef}
             idleOpacity={0}
@@ -1622,7 +1624,7 @@ export function OrbitalSatellites({
           depthOcclude
           orbitStyle
           microwaveStyle
-          orbitLineWidth={1.35}
+          orbitLineWidth={2.1}
           signalOpacity={0.26}
           rfOpacity={0.85}
           linkKey={pair.id}

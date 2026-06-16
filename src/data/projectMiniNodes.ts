@@ -26,78 +26,101 @@ export type ProjectMiniNodeProfile = {
  * Mini nodes cluster around the primary Projects marker (`1.3521, 103.8198`) so users can
  * drill into individual projects without leaving the Projects section context.
  */
+/**
+ * Coordinates are real Southeast-Asian cities clustered on land around the primary Projects
+ * marker (Singapore, `1.3521, 103.8198`) so each pin reads as a believable location near the
+ * hub rather than a dot floating in open ocean.
+ */
 export const projectMiniNodes: ProjectMiniNode[] = [
   {
     id: "systems-orbit",
     title: "Spacecraft Simulation Engine",
     subsection: "systems",
     subsectionIndex: 0,
-    latitude: 14.8621,
-    longitude: 111.2198,
+    // Kuala Lumpur, Malaysia
+    latitude: 3.139,
+    longitude: 101.6869,
   },
   {
     id: "systems-wan-dht",
     title: "WAN DHT",
     subsection: "systems",
     subsectionIndex: 1,
-    latitude: 6.7521,
-    longitude: 109.0198,
+    // Kuching, Sarawak (Borneo), Malaysia
+    latitude: 1.5535,
+    longitude: 110.3593,
   },
   {
     id: "systems-binary-exploitation",
     title: "Binary Exploitation",
     subsection: "systems",
     subsectionIndex: 2,
-    latitude: 11.2321,
-    longitude: 114.5198,
+    // Padang, West Sumatra, Indonesia
+    latitude: -0.9471,
+    longitude: 100.4172,
   },
   {
     id: "security-crypto-analysis",
     title: "Crypto Analysis",
     subsection: "security",
     subsectionIndex: 0,
-    latitude: 1.6421,
-    longitude: 110.2198,
+    // Palembang, South Sumatra, Indonesia
+    latitude: -2.9761,
+    longitude: 104.7754,
   },
   {
     id: "security-web-vuln-suite",
     title: "Web Vulnerability Suite",
     subsection: "security",
     subsectionIndex: 1,
-    latitude: 8.9021,
-    longitude: 116.7198,
+    // Pontianak, West Kalimantan (Borneo), Indonesia
+    latitude: -0.0263,
+    longitude: 109.3425,
   },
   {
     id: "systems-secure-crawler",
     title: "Secure Web Crawler",
     subsection: "systems",
     subsectionIndex: 3,
-    latitude: 4.1821,
-    longitude: 119.6198,
+    // Pekanbaru, Riau (Sumatra), Indonesia
+    latitude: 0.5071,
+    longitude: 101.4478,
   },
   {
     id: "webdev-ai-curriculum-mapper",
     title: "AI Curriculum Mapper",
     subsection: "webDev",
     subsectionIndex: 0,
-    latitude: 0.3521,
-    longitude: 120.1198,
+    // Medan, North Sumatra, Indonesia
+    latitude: 3.5952,
+    longitude: 98.6722,
   },
   {
     id: "webdev-huskender",
     title: "Huskender",
     subsection: "webDev",
     subsectionIndex: 1,
-    latitude: 3.4721,
-    longitude: 107.6198,
+    // Kuantan, Pahang (Malay Peninsula), Malaysia
+    latitude: 3.8077,
+    longitude: 103.326,
   },
   {
     id: "webdev-dev-exchange",
     title: "Dev Exchange",
     subsection: "webDev",
     subsectionIndex: 2,
-    latitude: 12.1121,
-    longitude: 122.1198,
+    // Bandar Lampung, South Sumatra, Indonesia
+    latitude: -5.45,
+    longitude: 105.2667,
+  },
+  {
+    id: "webdev-portfolio-globe",
+    title: "Portfolio Globe (This Site)",
+    subsection: "webDev",
+    subsectionIndex: 3,
+    // Jambi, Sumatra, Indonesia
+    latitude: -1.6101,
+    longitude: 103.6131,
   },
 ];
 
@@ -220,6 +243,20 @@ const projectMiniNodeProfiles: Record<string, ProjectMiniNodeProfile> = {
     impact: "Established an MVP collaboration platform for peer-to-peer technical support.",
     status: "Completed",
     links: [{ label: "Repository", href: "#" }],
+  },
+  "webdev-portfolio-globe": {
+    timeframe: "2026",
+    role: "Designer & Full-Stack Developer",
+    stack: ["Next.js", "React Three Fiber", "Three.js", "GLSL / WebGL", "TypeScript", "Tailwind CSS"],
+    highlights: [
+      "Built a real-time WebGL Earth with day/night terminator shading, a procedural volumetric cloud shader with hurricane cyclone cells, surface cloud shadows, and multi-layer Rayleigh/Mie atmospheric scattering.",
+      "Simulated a satellite constellation with Kepler-solved eccentric orbits and a self-healing inter-satellite mesh that routes traffic to ground stations via live shortest-path solves.",
+      "Engineered an interactive resume UX: cinematic camera rig, globe pins, and animated connectors that frame each section while respecting reduced-motion and mobile constraints.",
+    ],
+    impact:
+      "Turned a traditional resume into an explorable mission-control experience that doubles as a showcase of graphics, systems, and front-end engineering.",
+    status: "In progress",
+    links: [{ label: "Source", href: "#" }],
   },
 };
 

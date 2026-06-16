@@ -196,7 +196,8 @@ export function CameraRig({
         focusTiltedDirRef.current,
       );
       // Show more context around the selected node by pulling camera slightly back.
-      dfp.addScaledVector(td, isMobile ? 0.48 : 0.82);
+      // Extra pull-back so more of the satellite orbits stay in frame.
+      dfp.addScaledVector(td, isMobile ? 1.05 : 1.65);
       desiredPosition = dfp;
       if (!canWiggle) {
         const cameraLerpSpeed = reducedMotion

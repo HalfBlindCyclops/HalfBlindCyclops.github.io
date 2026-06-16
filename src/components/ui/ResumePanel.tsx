@@ -508,6 +508,8 @@ type ResumePanelProps = {
   onGoToNext?: () => void;
   /** Label for the next section; used for the Next control and accessibility. */
   nextSectionTitle?: string;
+  /** True when "next" wraps back to the first section (so the control reads "Back to start"). */
+  nextIsRestart?: boolean;
   isSplitView?: boolean;
   /** Horizontal connector line Y (percent), e.g. `"42%"`. */
   streamStartY?: string;
@@ -538,6 +540,7 @@ export function ResumePanel({
   onClose,
   onGoToNext,
   nextSectionTitle,
+  nextIsRestart = false,
   isSplitView = false,
   streamStartY = "50%",
   splitViewPanelTop,
@@ -790,9 +793,11 @@ export function ResumePanel({
                     type="button"
                     onClick={onGoToNext}
                     aria-label={
-                      nextSectionTitle
-                        ? `Go to next section: ${nextSectionTitle}`
-                        : "Go to next section"
+                      nextIsRestart
+                        ? `Back to start${nextSectionTitle ? `: ${nextSectionTitle}` : ""}`
+                        : nextSectionTitle
+                          ? `Go to next section: ${nextSectionTitle}`
+                          : "Go to next section"
                     }
                     className={`inline-flex shrink-0 items-center gap-1.5 px-4 py-2 text-[0.9375rem] font-medium tracking-wide hover:brightness-110 md:px-5 md:py-2.5 md:text-base ${SURFACE_PILL_BUTTON}`}
                     style={{
@@ -801,13 +806,13 @@ export function ResumePanel({
                       color: "rgb(236, 254, 255)",
                     }}
                   >
-                    Next
+                    {nextIsRestart ? "Back to start" : "Next"}
                     <span
                       aria-hidden
                       className="text-base leading-none md:text-lg"
                       style={{ color: colorToRgba(ACCENT_COLOR_HEX, 0.9) }}
                     >
-                      →
+                      {nextIsRestart ? "↺" : "→"}
                     </span>
                   </button>
                 ) : null}

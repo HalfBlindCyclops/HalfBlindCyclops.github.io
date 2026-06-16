@@ -54,7 +54,6 @@ import {
 import { useCanvasScreenRect } from "@/lib/useCanvasScreenRect";
 import {
   GLOBE_GROUP_Y_ROTATION,
-  LONGITUDE_ALIGNMENT_OFFSET_DEG,
   latLonToSceneWorld,
   sunDirectionForDate,
 } from "@/lib/geo";
@@ -278,8 +277,11 @@ function CursorLatLonTracker({
     const r = Math.hypot(localX, localY, localZ) || 1;
 
     const lat = (Math.asin(localY / r) * 180) / Math.PI;
-    const lonPrime = (Math.atan2(-localZ, -localX) * 180) / Math.PI;
-    let lon = lonPrime - LONGITUDE_ALIGNMENT_OFFSET_DEG;
+    // True geographic longitude of the texture point under the cursor.
+    // The Blue Marble equirect is mapped with default sphere UVs: lon 0 sits on
+    // +X and east runs toward -Z, so lon = atan2(-z, x). (Pins use a separate
+    // -34° placement convention in latLonToVector3, which is intentionally left as-is.)
+    let lon = (Math.atan2(-localZ, localX) * 180) / Math.PI;
     if (lon > 180) lon -= 360;
     if (lon < -180) lon += 360;
 
@@ -601,12 +603,13 @@ export function GlobeExperience() {
     }
     return selectedNode.title;
   }, [activeProjectMiniNode, isExperienceSelected, isProjectsSelected, projectBreadcrumb, selectedNode]);
-  const panelNextNode =
+  const panelNextIndex =
     showPanel === null
-      ? null
-      : resumeNodes[
-          (resumeNodes.findIndex((n) => n.id === showPanel.id) + 1) % resumeNodes.length
-        ];
+      ? -1
+      : (resumeNodes.findIndex((n) => n.id === showPanel.id) + 1) % resumeNodes.length;
+  const panelNextNode = panelNextIndex < 0 ? null : resumeNodes[panelNextIndex];
+  /** Last section wraps to the first node — surface that as "Back to start" instead of "Next". */
+  const panelNextIsRestart = panelNextIndex === 0;
   /** Two-phase switch: hide signal line first, then commit node swap next frame. */
   const [connectorPathsActive, setConnectorPathsActive] = useState(true);
   const switchRafRef = useRef<number | null>(null);
@@ -982,6 +985,7 @@ export function GlobeExperience() {
           showPanel && panelNextNode ? () => onSelectNode(panelNextNode) : undefined
         }
         nextSectionTitle={panelNextNode?.title}
+        nextIsRestart={panelNextIsRestart}
         isSplitView={isSplitView}
         streamStartY={streamStartY}
         splitViewPanelTop={splitPanelTop}

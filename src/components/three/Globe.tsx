@@ -1,10 +1,12 @@
 "use client";
 
-import { useCallback, useMemo } from "react";
-import { Color, SRGBColorSpace, Texture } from "three";
+import { useCallback, useMemo, useRef } from "react";
+import { Color, SRGBColorSpace, Texture, Vector3 } from "three";
+import type { Mesh } from "three";
 import { useTexture } from "@react-three/drei";
-import { useThree } from "@react-three/fiber";
+import { useFrame, useThree } from "@react-three/fiber";
 import { publicPath } from "@/lib/basePath";
+import { cloudFieldGLSL } from "@/components/three/cloudField.glsl";
 
 /**
  * Flat Blue Marble (no shaded relief). High WebP uses max WebP width (16383px); baked from 21600×10800 source.
@@ -47,11 +49,31 @@ export function Globe({ isMobile, reducedMotion, sunDirection }: GlobeProps) {
   );
 
   const sunTint = useMemo(() => new Color("#fff8ef"), []);
+  const meshRef = useRef<Mesh>(null);
+  const sunVec = useMemo(
+    () => new Vector3(sunDirection[0], sunDirection[1], sunDirection[2]).normalize(),
+    [sunDirection],
+  );
+  const sunUniform = useMemo(() => sunVec.clone(), [sunVec]);
+  // Skip the (relatively expensive) cloud-field evaluation on mobile to protect fragment cost.
+  const cloudShadowStrength = isMobile ? 0 : 0.5;
   // Higher segment count so a large day texture isn’t wasted on a faceted sphere.
   const segments = isMobile ? 56 : reducedMotion ? 88 : 112;
 
+  useFrame((state) => {
+    const mesh = meshRef.current;
+    if (!mesh) return;
+    const mat = mesh.material as { uniforms?: Record<string, { value: unknown }> };
+    if (!mat.uniforms) return;
+    (mat.uniforms.sunDirection.value as Vector3).copy(sunVec);
+    // Match the cloud shell's clock-driven uTime so shadows track the visible clouds.
+    if (!reducedMotion && mat.uniforms.uTime) {
+      mat.uniforms.uTime.value = state.clock.elapsedTime;
+    }
+  });
+
   return (
-    <mesh renderOrder={0}>
+    <mesh ref={meshRef} renderOrder={0}>
       <sphereGeometry args={[1, segments, segments]} />
       <shaderMaterial
         key={`${dayMapPath}-${nightMapPath}`}
@@ -60,7 +82,9 @@ export function Globe({ isMobile, reducedMotion, sunDirection }: GlobeProps) {
           dayMap: { value: dayMap },
           nightMap: { value: nightMap },
           sunTint: { value: sunTint },
-          sunDirection: { value: sunDirection },
+          sunDirection: { value: sunUniform },
+          uTime: { value: 0 },
+          uCloudShadowStrength: { value: cloudShadowStrength },
         }}
         vertexShader={`
           varying vec2 vUv;
@@ -84,6 +108,10 @@ export function Globe({ isMobile, reducedMotion, sunDirection }: GlobeProps) {
           uniform sampler2D nightMap;
           uniform vec3 sunTint;
           uniform vec3 sunDirection;
+          uniform float uTime;
+          uniform float uCloudShadowStrength;
+
+          ${cloudFieldGLSL}
 
           void main() {
             vec3 N = normalize(vNormalW);
@@ -118,6 +146,15 @@ export function Globe({ isMobile, reducedMotion, sunDirection }: GlobeProps) {
               + vec3(specular * 0.44 + fresnel * (0.38 + waterMask * 0.72));
             // Extra sun-facing lift on water (texture-only mask — reads as clearer tropical blues).
             dayColor += waterMask * daylight * diffuse * vec3(0.04, 0.078, 0.11);
+
+            // Cloud shadows: sample the shared cloud field slightly toward the sun so thick
+            // clouds darken the lit ground beneath them. Skipped at night / on mobile (strength 0).
+            if (uCloudShadowStrength > 0.0 && daylight > 0.001) {
+              vec3 shadowDir = normalize(radial + lightDir * 0.05);
+              float cloudDens = cf_cloudDensity(shadowDir, uTime);
+              float shade = smoothstep(0.16, 0.72, cloudDens) * uCloudShadowStrength * daylight;
+              dayColor *= 1.0 - shade;
+            }
 
             vec3 earthshine = dayTex * vec3(0.11, 0.12, 0.14);
             // Keep city lights strongest on the dark side to avoid daytime overglow.
