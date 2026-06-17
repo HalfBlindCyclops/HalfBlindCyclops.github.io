@@ -7,6 +7,7 @@ import { useTexture } from "@react-three/drei";
 import { useFrame, useThree } from "@react-three/fiber";
 import { publicPath } from "@/lib/basePath";
 import { cloudFieldGLSL } from "@/components/three/cloudField.glsl";
+import { advanceCloudSpin } from "@/components/three/cloudSpin";
 
 /**
  * Flat Blue Marble (no shaded relief). High WebP uses max WebP width (16383px); baked from 21600×10800 source.
@@ -19,9 +20,11 @@ type GlobeProps = {
   isMobile: boolean;
   reducedMotion: boolean;
   sunDirection: [number, number, number];
+  /** True while the camera is locked onto a node (drives the shared cloud spin rate). */
+  focused: boolean;
 };
 
-export function Globe({ isMobile, reducedMotion, sunDirection }: GlobeProps) {
+export function Globe({ isMobile, reducedMotion, sunDirection, focused }: GlobeProps) {
   const gl = useThree((s) => s.gl);
   const dayMapPath = DAY_MAP;
   const nightMapPath = NIGHT_MAP;
@@ -60,13 +63,15 @@ export function Globe({ isMobile, reducedMotion, sunDirection }: GlobeProps) {
   // Higher segment count so a large day texture isn’t wasted on a faceted sphere.
   const segments = isMobile ? 56 : reducedMotion ? 88 : 112;
 
-  useFrame((state) => {
+  useFrame((state, delta) => {
     const mesh = meshRef.current;
     if (!mesh) return;
     const mat = mesh.material as { uniforms?: Record<string, { value: unknown }> };
     if (!mat.uniforms) return;
     (mat.uniforms.sunDirection.value as Vector3).copy(sunVec);
-    // Match the cloud shell's clock-driven uTime so shadows track the visible clouds.
+    // Match the cloud shell's clock-driven uTime + shared spin so shadows track the clouds.
+    const spin = advanceCloudSpin(state.clock.elapsedTime, delta, focused, reducedMotion);
+    if (mat.uniforms.uSpin) mat.uniforms.uSpin.value = spin;
     if (!reducedMotion && mat.uniforms.uTime) {
       mat.uniforms.uTime.value = state.clock.elapsedTime;
     }
@@ -84,6 +89,7 @@ export function Globe({ isMobile, reducedMotion, sunDirection }: GlobeProps) {
           sunTint: { value: sunTint },
           sunDirection: { value: sunUniform },
           uTime: { value: 0 },
+          uSpin: { value: 0 },
           uCloudShadowStrength: { value: cloudShadowStrength },
         }}
         vertexShader={`
@@ -109,6 +115,7 @@ export function Globe({ isMobile, reducedMotion, sunDirection }: GlobeProps) {
           uniform vec3 sunTint;
           uniform vec3 sunDirection;
           uniform float uTime;
+          uniform float uSpin;
           uniform float uCloudShadowStrength;
 
           ${cloudFieldGLSL}
@@ -151,7 +158,7 @@ export function Globe({ isMobile, reducedMotion, sunDirection }: GlobeProps) {
             // clouds darken the lit ground beneath them. Skipped at night / on mobile (strength 0).
             if (uCloudShadowStrength > 0.0 && daylight > 0.001) {
               vec3 shadowDir = normalize(radial + lightDir * 0.05);
-              float cloudDens = cf_cloudDensity(shadowDir, uTime);
+              float cloudDens = cf_cloudDensity(shadowDir, uTime, uSpin);
               float shade = smoothstep(0.16, 0.72, cloudDens) * uCloudShadowStrength * daylight;
               dayColor *= 1.0 - shade;
             }

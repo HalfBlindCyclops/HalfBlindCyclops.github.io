@@ -11,11 +11,14 @@ import {
 } from "three";
 import type { Mesh } from "three";
 import { cloudFieldGLSL } from "@/components/three/cloudField.glsl";
+import { advanceCloudSpin } from "@/components/three/cloudSpin";
 
 type GlobeWeatherProps = {
   isMobile: boolean;
   reducedMotion: boolean;
   sunDirection: [number, number, number];
+  /** True while the camera is locked onto a node — spins the clouds faster so motion is visible. */
+  focused: boolean;
 };
 
 const cloudVertexShader = `
@@ -36,6 +39,7 @@ const cloudFragmentShader = `
 
   uniform vec3 sunDirection;
   uniform float uTime;
+  uniform float uSpin;
   uniform vec3 cloudBright;
   uniform vec3 cloudShadow;
   uniform vec3 cloudStorm;
@@ -50,7 +54,7 @@ const cloudFragmentShader = `
 
     float cirrus;
     float severeStorm;
-    float dens = cf_cloudSample(P, uTime, cirrus, severeStorm);
+    float dens = cf_cloudSample(P, uTime, uSpin, cirrus, severeStorm);
 
     float ndl = dot(N, L);
     float day = smoothstep(-0.14, 0.26, ndl);
@@ -84,6 +88,7 @@ function CloudLayer({
   isMobile,
   reducedMotion,
   sunDirection,
+  focused,
 }: GlobeWeatherProps) {
   const meshRef = useRef<Mesh>(null);
   const sunVec = useMemo(
@@ -99,15 +104,17 @@ function CloudLayer({
   /** Slightly above terrain so clouds sit over land/ocean without z-fighting. */
   const cloudRadius = 1.014;
 
-  useFrame((state) => {
+  useFrame((state, delta) => {
     const mesh = meshRef.current;
     if (!mesh) return;
     const mat = mesh.material as ShaderMaterial;
+    // Spin is driven by a shared accumulator so the cloud shell and the Earth surface shadow
+    // sampler use the identical angle. Rate is slow when idle, faster when locked on a node.
+    const spin = advanceCloudSpin(state.clock.elapsedTime, delta, focused, reducedMotion);
+    if (mat.uniforms.uSpin) mat.uniforms.uSpin.value = spin;
     if (!reducedMotion && mat.uniforms.uTime) {
-      // Drive uTime from the shared R3F clock (not accumulated dt) so the Earth surface
-      // shader can sample the identical cloud field and cast matching shadows. The actual
-      // cloud motion/rotation lives in the shared field (rotating the mesh is a no-op here
-      // since the noise is evaluated in world space).
+      // Drive uTime from the shared R3F clock so the morphing/storm motion matches the Earth
+      // surface sampler. (Rotating the mesh itself is a no-op since noise is in world space.)
       mat.uniforms.uTime.value = state.clock.elapsedTime;
     }
     mat.uniforms.sunDirection.value.copy(sunVec);
@@ -129,6 +136,7 @@ function CloudLayer({
         uniforms={{
           sunDirection: { value: uniformSunDirection },
           uTime: { value: 0 },
+          uSpin: { value: 0 },
           cloudBright: { value: cloudBright },
           cloudShadow: { value: cloudShadow },
           cloudStorm: { value: cloudStorm },

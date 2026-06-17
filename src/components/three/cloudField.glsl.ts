@@ -101,13 +101,13 @@ export const cloudFieldGLSL = /* glsl */ `
    * Returns the thick-cloud density [0,1] and writes the auxiliary cirrus and
    * severe-storm terms the cloud shell needs for its own shading.
    */
-  float cf_cloudSample(vec3 P, float uTime, out float cirrusOut, out float severeStormOut) {
-    // Gentle global drift: rotate the sampling domain about the polar axis so the whole cloud
-    // system slowly creeps eastward while latitude bands stay put. Both the cloud shell and the
-    // surface-shadow sampler call this, so the shadows track the moving clouds exactly.
-    float rot = uTime * 0.024;
-    float cr = cos(rot);
-    float sr = sin(rot);
+  float cf_cloudSample(vec3 P, float uTime, float spin, out float cirrusOut, out float severeStormOut) {
+    // Global drift: rotate the sampling domain about the polar axis by the externally supplied
+    // spin angle (latitude bands stay put). Both the cloud shell and the surface-shadow sampler
+    // receive the same angle, so the shadows track the moving clouds exactly. The spin rate is
+    // controlled on the CPU (slow when idle, faster when locked onto a node).
+    float cr = cos(spin);
+    float sr = sin(spin);
     P = vec3(P.x * cr + P.z * sr, P.y, -P.x * sr + P.z * cr);
 
     float lat = P.y;
@@ -180,9 +180,9 @@ export const cloudFieldGLSL = /* glsl */ `
   }
 
   /** Thick-cloud density only (for surfaces that just need the shadow mask). */
-  float cf_cloudDensity(vec3 P, float uTime) {
+  float cf_cloudDensity(vec3 P, float uTime, float spin) {
     float cirrus;
     float severeStorm;
-    return cf_cloudSample(P, uTime, cirrus, severeStorm);
+    return cf_cloudSample(P, uTime, spin, cirrus, severeStorm);
   }
 `;

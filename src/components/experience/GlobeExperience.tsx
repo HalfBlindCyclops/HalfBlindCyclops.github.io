@@ -520,6 +520,9 @@ export function GlobeExperience() {
   const isMobile = useMobileLayout();
 
   const activeNodeId = selectedNode?.id ?? null;
+  /** Camera locked onto a node: spin the clouds faster so motion reads at close range. */
+  const cloudLockedOnNode =
+    selectedNode !== null && (sceneMode === "focusing" || sceneMode === "focused");
   const isProjectsSelected = selectedNode?.id === "projects";
   const isExperienceSelected = selectedNode?.id === "experience";
   const projectsNode = useMemo(() => resumeNodes.find((node) => node.id === "projects") ?? null, []);
@@ -836,11 +839,13 @@ export function GlobeExperience() {
                 isMobile={isMobile}
                 reducedMotion={Boolean(prefersReducedMotion)}
                 sunDirection={sunDirection}
+                focused={cloudLockedOnNode}
               />
               <GlobeWeather
                 isMobile={isMobile}
                 reducedMotion={Boolean(prefersReducedMotion)}
                 sunDirection={sunDirection}
+                focused={cloudLockedOnNode}
               />
               <Atmosphere
                 sunDirection={sunDirection}
