@@ -102,32 +102,97 @@ function makeSunCoreTexture(): CanvasTexture {
   return new CanvasTexture(canvas);
 }
 
+/** Seeded LCG so ray jitter is deterministic across renders. */
+function lcgRand(seedRef: { v: number }): number {
+  seedRef.v = (Math.imul(seedRef.v, 1664525) + 1013904223) | 0;
+  return ((seedRef.v >>> 0) / 0xffffffff);
+}
+
 function makeSunRaysTexture(): CanvasTexture {
   const { canvas, ctx } = makeCanvas512();
   if (!ctx) return new CanvasTexture(canvas);
   const c = 256;
   ctx.translate(c, c);
-  for (let i = 0; i < 28; i += 1) {
-    const angle = (Math.PI * 2 * i) / 28;
+  const rng = { v: 0x9e3779b9 };
+
+  // Primary rays: longer tapered streaks with organic spacing.
+  const primaryCount = 14;
+  for (let i = 0; i < primaryCount; i += 1) {
+    const baseAngle = (Math.PI * 2 * i) / primaryCount;
+    const angle = baseAngle + (lcgRand(rng) - 0.5) * 0.28;
+    const len = c * (0.68 + lcgRand(rng) * 0.26);
+    const halfBase = 3.5 + lcgRand(rng) * 3.5;
+    const alpha = 0.13 + lcgRand(rng) * 0.10;
     ctx.save();
     ctx.rotate(angle);
-    const ray = ctx.createLinearGradient(0, 0, c * 0.8, 0);
-    ray.addColorStop(0, "rgba(255,228,150,0)");
-    ray.addColorStop(0.32, "rgba(255,210,120,0.14)");
-    ray.addColorStop(0.72, "rgba(255,186,106,0.08)");
-    ray.addColorStop(1, "rgba(255,168,86,0)");
-    ctx.fillStyle = ray;
-    ctx.fillRect(0, -1, c * 0.82, 2);
+    // Tapered triangle: wide at inner edge, comes to a point at the far end.
+    ctx.beginPath();
+    ctx.moveTo(c * 0.07, -halfBase);
+    ctx.lineTo(c * 0.07, halfBase);
+    ctx.lineTo(len, 0.4);
+    ctx.lineTo(len, -0.4);
+    ctx.closePath();
+    const grad = ctx.createLinearGradient(c * 0.07, 0, len, 0);
+    grad.addColorStop(0, `rgba(255,248,220,${alpha})`);
+    grad.addColorStop(0.4, `rgba(255,228,170,${(alpha * 0.6).toFixed(3)})`);
+    grad.addColorStop(1, "rgba(255,200,130,0)");
+    ctx.fillStyle = grad;
+    ctx.fill();
     ctx.restore();
   }
-  const core = ctx.createRadialGradient(0, 0, 6, 0, 0, c);
-  core.addColorStop(0, "rgba(255,245,200,0.35)");
-  core.addColorStop(0.5, "rgba(255,210,130,0.15)");
-  core.addColorStop(1, "rgba(255,170,90,0)");
-  ctx.fillStyle = core;
+
+  // Secondary rays: shorter, dimmer, denser — fill gaps between primaries.
+  const secondaryCount = 22;
+  for (let i = 0; i < secondaryCount; i += 1) {
+    const baseAngle = (Math.PI * 2 * i) / secondaryCount;
+    const angle = baseAngle + (lcgRand(rng) - 0.5) * 0.35;
+    const len = c * (0.36 + lcgRand(rng) * 0.26);
+    const halfBase = 1.2 + lcgRand(rng) * 1.8;
+    const alpha = 0.05 + lcgRand(rng) * 0.06;
+    ctx.save();
+    ctx.rotate(angle);
+    ctx.beginPath();
+    ctx.moveTo(c * 0.09, -halfBase);
+    ctx.lineTo(c * 0.09, halfBase);
+    ctx.lineTo(len, 0.2);
+    ctx.lineTo(len, -0.2);
+    ctx.closePath();
+    const grad = ctx.createLinearGradient(c * 0.09, 0, len, 0);
+    grad.addColorStop(0, `rgba(255,242,210,${alpha})`);
+    grad.addColorStop(0.55, `rgba(255,218,160,${(alpha * 0.45).toFixed(3)})`);
+    grad.addColorStop(1, "rgba(255,190,110,0)");
+    ctx.fillStyle = grad;
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // Soft inner corona halo on top of the rays.
+  const halo = ctx.createRadialGradient(0, 0, c * 0.05, 0, 0, c * 0.82);
+  halo.addColorStop(0, "rgba(255,252,235,0.26)");
+  halo.addColorStop(0.18, "rgba(255,238,195,0.14)");
+  halo.addColorStop(0.52, "rgba(255,210,145,0.06)");
+  halo.addColorStop(1, "rgba(255,175,100,0)");
+  ctx.fillStyle = halo;
   ctx.beginPath();
   ctx.arc(0, 0, c, 0, Math.PI * 2);
   ctx.fill();
+
+  return new CanvasTexture(canvas);
+}
+
+/** Large diffuse bloom — no rays, just a warm radial glow for the outer corona. */
+function makeSunBloomTexture(): CanvasTexture {
+  const { canvas, ctx } = makeCanvas512();
+  if (!ctx) return new CanvasTexture(canvas);
+  const c = 256;
+  const g = ctx.createRadialGradient(c, c, c * 0.01, c, c, c);
+  g.addColorStop(0, "rgba(255,252,235,0.52)");
+  g.addColorStop(0.07, "rgba(255,242,205,0.36)");
+  g.addColorStop(0.22, "rgba(255,220,165,0.15)");
+  g.addColorStop(0.50, "rgba(255,195,120,0.06)");
+  g.addColorStop(1, "rgba(255,165,85,0)");
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 512, 512);
   return new CanvasTexture(canvas);
 }
 
@@ -185,31 +250,46 @@ function SunMoonLayer({ sunDirection }: { sunDirection: [number, number, number]
   const moonCrescentShadowTexture = useMemo(() => makeCrescentShadowTexture(), []);
   const sunCoreTexture = useMemo(() => makeSunCoreTexture(), []);
   const sunRaysTexture = useMemo(() => makeSunRaysTexture(), []);
+  const sunBloomTexture = useMemo(() => makeSunBloomTexture(), []);
 
   useFrame((state) => {
     if (raysRef.current) {
-      raysRef.current.material.rotation = state.clock.elapsedTime * 0.06;
+      // Very slow drift — corona barely rotates, not a pinwheel.
+      raysRef.current.material.rotation = state.clock.elapsedTime * 0.018;
     }
   });
 
   return (
     <>
-      <sprite position={sunPos.toArray()} scale={[17, 17, 1]}>
+      {/* Outer diffuse bloom — static, large, very soft */}
+      <sprite position={sunPos.toArray()} scale={[62, 62, 1]}>
         <spriteMaterial
-          map={sunCoreTexture}
+          map={sunBloomTexture}
           transparent
           depthWrite={false}
           depthTest
+          opacity={0.55}
           blending={AdditiveBlending}
         />
       </sprite>
-      <sprite ref={raysRef} position={sunPos.toArray()} scale={[24, 24, 1]}>
+      {/* Tapered streaking rays — slow drift */}
+      <sprite ref={raysRef} position={sunPos.toArray()} scale={[34, 34, 1]}>
         <spriteMaterial
           map={sunRaysTexture}
           transparent
           depthWrite={false}
           depthTest
-          opacity={0.72}
+          opacity={0.82}
+          blending={AdditiveBlending}
+        />
+      </sprite>
+      {/* Bright solar disc core */}
+      <sprite position={sunPos.toArray()} scale={[16, 16, 1]}>
+        <spriteMaterial
+          map={sunCoreTexture}
+          transparent
+          depthWrite={false}
+          depthTest
           blending={AdditiveBlending}
         />
       </sprite>
