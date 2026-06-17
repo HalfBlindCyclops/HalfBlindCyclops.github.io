@@ -80,15 +80,17 @@ function SpacePhotoBackdrop({
   );
 }
 
-function makeSunCoreTexture(): CanvasTexture {
-  const size = 512;
+function makeCanvas512() {
   const canvas = document.createElement("canvas");
-  canvas.width = size;
-  canvas.height = size;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return new CanvasTexture(canvas);
+  canvas.width = 512;
+  canvas.height = 512;
+  return { canvas, ctx: canvas.getContext("2d") };
+}
 
-  const c = size / 2;
+function makeSunCoreTexture(): CanvasTexture {
+  const { canvas, ctx } = makeCanvas512();
+  if (!ctx) return new CanvasTexture(canvas);
+  const c = 256;
   const g = ctx.createRadialGradient(c, c, 8, c, c, c);
   g.addColorStop(0, "rgba(255,253,245,1)");
   g.addColorStop(0.18, "rgba(255,236,188,0.98)");
@@ -96,19 +98,14 @@ function makeSunCoreTexture(): CanvasTexture {
   g.addColorStop(0.72, "rgba(255,138,62,0.34)");
   g.addColorStop(1, "rgba(255,120,60,0)");
   ctx.fillStyle = g;
-  ctx.fillRect(0, 0, size, size);
+  ctx.fillRect(0, 0, 512, 512);
   return new CanvasTexture(canvas);
 }
 
 function makeSunRaysTexture(): CanvasTexture {
-  const size = 512;
-  const canvas = document.createElement("canvas");
-  canvas.width = size;
-  canvas.height = size;
-  const ctx = canvas.getContext("2d");
+  const { canvas, ctx } = makeCanvas512();
   if (!ctx) return new CanvasTexture(canvas);
-
-  const c = size / 2;
+  const c = 256;
   ctx.translate(c, c);
   for (let i = 0; i < 28; i += 1) {
     const angle = (Math.PI * 2 * i) / 28;
@@ -123,7 +120,6 @@ function makeSunRaysTexture(): CanvasTexture {
     ctx.fillRect(0, -1, c * 0.82, 2);
     ctx.restore();
   }
-
   const core = ctx.createRadialGradient(0, 0, 6, 0, 0, c);
   core.addColorStop(0, "rgba(255,245,200,0.35)");
   core.addColorStop(0.5, "rgba(255,210,130,0.15)");
@@ -132,45 +128,33 @@ function makeSunRaysTexture(): CanvasTexture {
   ctx.beginPath();
   ctx.arc(0, 0, c, 0, Math.PI * 2);
   ctx.fill();
-
   return new CanvasTexture(canvas);
 }
 
 function makeCircularMaskTexture(): CanvasTexture {
-  const size = 512;
-  const canvas = document.createElement("canvas");
-  canvas.width = size;
-  canvas.height = size;
-  const ctx = canvas.getContext("2d");
+  const { canvas, ctx } = makeCanvas512();
   if (!ctx) return new CanvasTexture(canvas);
-
-  const c = size / 2;
+  const c = 256;
   const g = ctx.createRadialGradient(c, c, c * 0.86, c, c, c);
   g.addColorStop(0, "rgba(255,255,255,1)");
   g.addColorStop(0.9, "rgba(255,255,255,1)");
   g.addColorStop(1, "rgba(255,255,255,0)");
   ctx.fillStyle = g;
-  ctx.fillRect(0, 0, size, size);
+  ctx.fillRect(0, 0, 512, 512);
   return new CanvasTexture(canvas);
 }
 
 function makeCrescentShadowTexture(): CanvasTexture {
-  const size = 512;
-  const canvas = document.createElement("canvas");
-  canvas.width = size;
-  canvas.height = size;
-  const ctx = canvas.getContext("2d");
+  const { canvas, ctx } = makeCanvas512();
   if (!ctx) return new CanvasTexture(canvas);
-
-  const c = size / 2;
+  const c = 256;
   // Start with a soft full-disc shadow.
   const base = ctx.createRadialGradient(c, c, c * 0.28, c, c, c * 0.98);
   base.addColorStop(0, "rgba(0,0,0,0)");
   base.addColorStop(0.62, "rgba(0,0,0,0.18)");
   base.addColorStop(1, "rgba(0,0,0,0.48)");
   ctx.fillStyle = base;
-  ctx.fillRect(0, 0, size, size);
-
+  ctx.fillRect(0, 0, 512, 512);
   // Carve out a brighter lobe to leave a crescent darkness on one side.
   ctx.globalCompositeOperation = "destination-out";
   const cut = ctx.createRadialGradient(c * 0.78, c * 0.5, c * 0.08, c * 0.78, c * 0.5, c * 0.7);
@@ -181,7 +165,6 @@ function makeCrescentShadowTexture(): CanvasTexture {
   ctx.arc(c * 0.78, c * 0.5, c * 0.74, 0, Math.PI * 2);
   ctx.fill();
   ctx.globalCompositeOperation = "source-over";
-
   return new CanvasTexture(canvas);
 }
 

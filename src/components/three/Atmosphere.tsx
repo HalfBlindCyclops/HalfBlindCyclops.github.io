@@ -3,6 +3,26 @@
 import { BackSide, Color, FrontSide, NormalBlending } from "three";
 import { useMemo } from "react";
 
+const atmoVertexShader = `
+  varying vec3 vWorldPos;
+  void main() {
+    vec4 wp = modelMatrix * vec4(position, 1.0);
+    vWorldPos = wp.xyz;
+    gl_Position = projectionMatrix * viewMatrix * wp;
+  }
+`;
+
+const atmoVertexShaderWithNormal = `
+  varying vec3 vWorldPos;
+  varying vec3 vWorldNormal;
+  void main() {
+    vec4 wp = modelMatrix * vec4(position, 1.0);
+    vWorldPos = wp.xyz;
+    vWorldNormal = normalize(mat3(modelMatrix) * normal);
+    gl_Position = projectionMatrix * viewMatrix * wp;
+  }
+`;
+
 type AtmosphereProps = {
   sunDirection: [number, number, number];
   isMobile: boolean;
@@ -43,15 +63,7 @@ export function Atmosphere({ sunDirection, isMobile, reducedMotion }: Atmosphere
             bulkDayAir: { value: bulkDayAir },
             bulkTwilightAir: { value: bulkTwilightAir },
           }}
-          vertexShader={`
-            varying vec3 vWorldPos;
-
-            void main() {
-              vec4 wp = modelMatrix * vec4(position, 1.0);
-              vWorldPos = wp.xyz;
-              gl_Position = projectionMatrix * viewMatrix * wp;
-            }
-          `}
+          vertexShader={atmoVertexShader}
           fragmentShader={`
             varying vec3 vWorldPos;
 
@@ -110,17 +122,7 @@ export function Atmosphere({ sunDirection, isMobile, reducedMotion }: Atmosphere
             limbAlphaFloor: { value: 0.46 },
             limbBodyOpacity: { value: 0.32 },
           }}
-          vertexShader={`
-            varying vec3 vWorldPos;
-            varying vec3 vWorldNormal;
-
-            void main() {
-              vec4 wp = modelMatrix * vec4(position, 1.0);
-              vWorldPos = wp.xyz;
-              vWorldNormal = normalize(mat3(modelMatrix) * normal);
-              gl_Position = projectionMatrix * viewMatrix * wp;
-            }
-          `}
+          vertexShader={atmoVertexShaderWithNormal}
           fragmentShader={`
             varying vec3 vWorldPos;
             varying vec3 vWorldNormal;
@@ -195,17 +197,7 @@ export function Atmosphere({ sunDirection, isMobile, reducedMotion }: Atmosphere
             sunDirection: { value: sunDirection },
             hazeColor: { value: hazeColor },
           }}
-          vertexShader={`
-            varying vec3 vWorldPos;
-            varying vec3 vWorldNormal;
-
-            void main() {
-              vec4 wp = modelMatrix * vec4(position, 1.0);
-              vWorldPos = wp.xyz;
-              vWorldNormal = normalize(mat3(modelMatrix) * normal);
-              gl_Position = projectionMatrix * viewMatrix * wp;
-            }
-          `}
+          vertexShader={atmoVertexShaderWithNormal}
           fragmentShader={`
             varying vec3 vWorldPos;
             varying vec3 vWorldNormal;

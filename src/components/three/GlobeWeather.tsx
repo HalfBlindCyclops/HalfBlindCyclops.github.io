@@ -148,23 +148,9 @@ function CloudLayer({
   );
 }
 
-function PrecipitationShell({
-  isMobile,
-  reducedMotion,
-}: Pick<GlobeWeatherProps, "isMobile" | "reducedMotion">) {
-  void isMobile;
-  void reducedMotion;
-  return null;
-}
-
 /**
- * Procedural cloud shell + light precipitation streaks around the globe.
+ * Procedural cloud shell around the globe.
  */
 export function GlobeWeather(props: GlobeWeatherProps) {
-  return (
-    <>
-      <CloudLayer {...props} />
-      <PrecipitationShell isMobile={props.isMobile} reducedMotion={props.reducedMotion} />
-    </>
-  );
+  return <CloudLayer {...props} />;
 }

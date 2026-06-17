@@ -335,8 +335,6 @@ function buildSatelliteLinkCandidates(specs: SatelliteSpec[]): SatelliteLinkCand
 const UP_AXIS = new Vector3(0, 1, 0);
 const ALT_AXIS = new Vector3(1, 0, 0);
 const SIGNAL_ARC_SEGMENTS = 28;
-const SIGNAL_ARC_LIFT = 0.16;
-const SIGNAL_CLEARANCE_RADIUS = 1.08;
 const SATELLITE_SPEED_SCALE = 1 / 6;
 const PLANET_BLOCK_RADIUS = 1.03;
 const GROUND_LINK_BLOCK_RADIUS = 0.995;
@@ -367,9 +365,6 @@ type LineLikeObject = {
   material?: { opacity?: number; linewidth?: number };
 };
 
-type GroupLikeObject = {
-  localToWorld: (point: Vector3) => Vector3;
-};
 const RF_LAYER_MULTIPATH_GAIN = 1.9;
 const RF_CHAOS_GAIN = 2.2;
 const PACKET_TRAVEL_SEC = 1.25;
@@ -540,46 +535,11 @@ function orbitPoint(spec: SatelliteSpec, theta: number, out: Vector3) {
   return out;
 }
 
-function buildSignalArcPoints(
-  start: Vector3,
-  end: Vector3,
-  points: Vector3[],
-  startDir: Vector3,
-  endDir: Vector3,
-  dirOut: Vector3,
-  straight = false,
-) {
-  if (straight) {
-    for (let i = 0; i <= SIGNAL_ARC_SEGMENTS; i += 1) {
-      const t = i / SIGNAL_ARC_SEGMENTS;
-      points[i].copy(start).lerp(end, t);
-    }
-    return;
-  }
-  const startLen = start.length();
-  const endLen = end.length();
-  startDir.copy(start).normalize();
-  endDir.copy(end).normalize();
+function buildSignalArcPoints(start: Vector3, end: Vector3, points: Vector3[]) {
   for (let i = 0; i <= SIGNAL_ARC_SEGMENTS; i += 1) {
     const t = i / SIGNAL_ARC_SEGMENTS;
-    // `Vector3.slerpVectors` is not available in all Three builds; use normalized blend.
-    dirOut.copy(startDir).lerp(endDir, t).normalize();
-    const baseRadius = startLen + (endLen - startLen) * t;
-    const liftedRadius =
-      Math.max(SIGNAL_CLEARANCE_RADIUS, baseRadius) + Math.sin(Math.PI * t) * SIGNAL_ARC_LIFT;
-    points[i].copy(dirOut).multiplyScalar(liftedRadius);
+    points[i].copy(start).lerp(end, t);
   }
-}
-
-function pointOnArc(points: Vector3[], t: number, out: Vector3) {
-  if (points.length === 0) return out.set(0, 0, 0);
-  if (points.length === 1) return out.copy(points[0]);
-  const clamped = Math.max(0, Math.min(1, t));
-  const scaled = clamped * (points.length - 1);
-  const i = Math.floor(scaled);
-  const next = Math.min(points.length - 1, i + 1);
-  const localT = scaled - i;
-  return out.copy(points[i]).lerp(points[next], localT);
 }
 
 function setLineGeometryFromPoints(
@@ -716,15 +676,9 @@ function SignalLine({
   phase,
   signalColor,
   reducedMotion,
-  alwaysVisible = false,
   emphasize = false,
-  showWaveWhenReduced = false,
-  solid = false,
-  straight = false,
   depthOcclude = false,
-  halo = false,
   requireClearPath = false,
-  requireFullLineVisible = false,
   orbitStyle = false,
   orbitLineWidth = 0.8,
   signalOpacity = 0.72,
@@ -736,10 +690,6 @@ function SignalLine({
   activeNoiseLinkKeysRef,
   idleOpacity = 0.08,
   idleLineWidth = 0.2,
-  requireActiveSatPair = false,
-  activeSatIndicesRef,
-  satPairAIndex,
-  satPairBIndex,
   lowQuality = false,
   microwaveStyle = false,
 }: {
@@ -748,15 +698,9 @@ function SignalLine({
   phase: number;
   signalColor: Color;
   reducedMotion: boolean;
-  alwaysVisible?: boolean;
   emphasize?: boolean;
-  showWaveWhenReduced?: boolean;
-  solid?: boolean;
-  straight?: boolean;
   depthOcclude?: boolean;
-  halo?: boolean;
   requireClearPath?: boolean;
-  requireFullLineVisible?: boolean;
   orbitStyle?: boolean;
   orbitLineWidth?: number;
   signalOpacity?: number;
@@ -768,30 +712,16 @@ function SignalLine({
   activeNoiseLinkKeysRef?: MutableRefObject<Set<string>>;
   idleOpacity?: number;
   idleLineWidth?: number;
-  requireActiveSatPair?: boolean;
-  activeSatIndicesRef?: MutableRefObject<Set<number>>;
-  satPairAIndex?: number;
-  satPairBIndex?: number;
   lowQuality?: boolean;
   microwaveStyle?: boolean;
 }) {
   const signalLineRef = useRef<LineLikeObject | null>(null);
   const rfLineRef = useRef<LineLikeObject | null>(null);
-  const pulseRef = useRef<Mesh>(null);
-  const waveDotsRef = useRef<Array<Mesh | null>>([]);
   const startTmpRef = useRef(new Vector3());
   const endTmpRef = useRef(new Vector3());
-  const pointTmpRef = useRef(new Vector3());
-  const dirRef = useRef(new Vector3());
-  const normalRef = useRef(new Vector3());
-  const baseRef = useRef(new Vector3());
-  const startDirRef = useRef(new Vector3());
-  const endDirRef = useRef(new Vector3());
-  const arcDirRef = useRef(new Vector3());
   const arcPointsRef = useRef(
     Array.from({ length: SIGNAL_ARC_SEGMENTS + 1 }, () => new Vector3()),
   );
-  const signalGroupRef = useRef<GroupLikeObject | null>(null);
   const linePositionsRef = useRef<number[]>(
     Array.from({ length: (SIGNAL_ARC_SEGMENTS + 1) * 3 }, () => 0),
   );
@@ -803,13 +733,6 @@ function SignalLine({
   const tmpNextRef = useRef(new Vector3());
   const tmpTangentRef = useRef(new Vector3());
   const tmpNormalRef = useRef(new Vector3());
-  const worldStartRef = useRef(new Vector3());
-  const worldEndRef = useRef(new Vector3());
-  const worldMidRef = useRef(new Vector3());
-  const tangentFromRef = useRef(new Vector3());
-  const tangentToRef = useRef(new Vector3());
-  const camDirRef = useRef(new Vector3());
-  const midRef = useRef(new Vector3());
   const previousStartRef = useRef(new Vector3());
   const previousEndRef = useRef(new Vector3());
   const previousArcValidRef = useRef(false);
@@ -818,7 +741,7 @@ function SignalLine({
   const wasLinkSelectedRef = useRef(false);
 
   useFrame((state, delta) => {
-    const { clock, camera } = state;
+    const { clock } = state;
     const t = clock.elapsedTime;
     const linkSelected = !linkKey || !activeLinkKeysRef || activeLinkKeysRef.current.has(linkKey);
     const noiseSelected =
@@ -864,10 +787,6 @@ function SignalLine({
         startTmpRef.current,
         endTmpRef.current,
         arcPointsRef.current,
-        startDirRef.current,
-        endDirRef.current,
-        arcDirRef.current,
-        straight,
       );
       previousStartRef.current.copy(startTmpRef.current);
       previousEndRef.current.copy(endTmpRef.current);
@@ -875,36 +794,9 @@ function SignalLine({
       arcRebuildAccumRef.current = 0;
       setLineGeometryFromPoints(signalLineRef, arcPointsRef.current, linePositionsRef.current);
     }
-    camDirRef.current.copy(camera.position).normalize();
-    pointOnArc(arcPointsRef.current, 0.5, midRef.current);
-    worldStartRef.current.copy(startTmpRef.current);
-    worldEndRef.current.copy(endTmpRef.current);
-    worldMidRef.current.copy(midRef.current);
-    const signalGroup = signalGroupRef.current;
-    if (signalGroup) {
-      signalGroup.localToWorld(worldStartRef.current);
-      signalGroup.localToWorld(worldEndRef.current);
-      signalGroup.localToWorld(worldMidRef.current);
-    }
-    const startFacing = worldStartRef.current.normalize().dot(camDirRef.current);
-    const endFacing = worldEndRef.current.normalize().dot(camDirRef.current);
-    const midFacing = worldMidRef.current.normalize().dot(camDirRef.current);
-    const baseVisible = alwaysVisible || Math.max(startFacing, endFacing, midFacing) > -0.06;
-    const pathClear = !requireClearPath
+    const lineVisible = !requireClearPath
       ? true
       : segmentClearsPlanet(startTmpRef.current, endTmpRef.current, PLANET_BLOCK_RADIUS);
-    const fullLineVisible = !requireFullLineVisible
-      ? true
-      : startFacing > 0 && endFacing > 0 && midFacing > 0;
-    const activeSatPair =
-      !requireActiveSatPair ||
-      !activeSatIndicesRef ||
-      satPairAIndex === undefined ||
-      satPairBIndex === undefined
-        ? true
-        : activeSatIndicesRef.current.has(satPairAIndex) &&
-          activeSatIndicesRef.current.has(satPairBIndex);
-    const lineVisible = baseVisible && pathClear && fullLineVisible && activeSatPair;
 
     const rfPoints = rfPointsRef.current;
     const packetCenter = 0.065 + ((t % PACKET_TRAVEL_SEC) / PACKET_TRAVEL_SEC) * 0.87;
@@ -965,18 +857,11 @@ function SignalLine({
     }
 
     if (signalLineRef.current?.material) {
-      const flicker = 0;
-      const baseOpacity = !linkSelected
-        ? idleOpacity
-        : solid
-            ? 1
-            : emphasize
-              ? 0.82
-              : signalOpacity;
-      signalLineRef.current.material.opacity = lineVisible ? baseOpacity + flicker : 0;
-      if (orbitStyle && !solid) {
+      const baseOpacity = !linkSelected ? idleOpacity : emphasize ? 0.82 : signalOpacity;
+      signalLineRef.current.material.opacity = lineVisible ? baseOpacity : 0;
+      if (orbitStyle) {
         signalLineRef.current.material.linewidth = linkSelected ? orbitLineWidth : 0;
-      } else if (!solid) {
+      } else {
         signalLineRef.current.material.linewidth = linkSelected ? signalLineWidth : idleLineWidth;
       }
     }
@@ -984,70 +869,16 @@ function SignalLine({
       const rfVisibilityScale = interSatDynamicStatic ? staticStrength : 1;
       rfLineRef.current.material.opacity =
         lineVisible && linkSelected
-          ? (solid || (orbitStyle && !microwaveStyle) ? 0 : rfOpacity) * rfVisibilityScale
+          ? ((orbitStyle && !microwaveStyle) ? 0 : rfOpacity) * rfVisibilityScale
           : 0;
-      if (!orbitStyle && !solid) {
+      if (!orbitStyle) {
         rfLineRef.current.material.linewidth = linkSelected ? rfLineWidth : idleLineWidth;
       }
-    }
-
-    if (pulseRef.current) {
-      const pulseSpeed = reducedMotion ? (showWaveWhenReduced ? 0.038 : 0.025) : 0.065;
-      const pulseT = (t * pulseSpeed + phase * 0.13) % 1;
-      pointOnArc(arcPointsRef.current, pulseT, pointTmpRef.current);
-      pulseRef.current.position.copy(pointTmpRef.current);
-      pulseRef.current.visible = false;
-    }
-
-    const showWave = false && !solid && lineVisible && (!reducedMotion || showWaveWhenReduced);
-    if (showWave) {
-      for (let i = 0; i < 5; i += 1) {
-        const dot = waveDotsRef.current[i];
-        if (!dot) continue;
-        const waveSpeed = reducedMotion ? 0.05 : 0.08;
-        const p = ((i / 5) + t * waveSpeed + phase * 0.1) % 1;
-        pointOnArc(arcPointsRef.current, p, baseRef.current);
-        pointOnArc(arcPointsRef.current, Math.max(0, p - 0.03), tangentFromRef.current);
-        pointOnArc(arcPointsRef.current, Math.min(1, p + 0.03), tangentToRef.current);
-        dirRef.current.copy(tangentToRef.current).sub(tangentFromRef.current).normalize();
-        normalRef.current.copy(baseRef.current).normalize();
-        if (normalRef.current.lengthSq() < 1e-6) {
-          normalRef.current.crossVectors(dirRef.current, UP_AXIS);
-          if (normalRef.current.lengthSq() < 1e-6) {
-            normalRef.current.crossVectors(dirRef.current, ALT_AXIS);
-          }
-          normalRef.current.normalize();
-        }
-        const wavePhase = p * Math.PI * 8 - t * 4.6 + phase;
-        const amp = 0.0065 * Math.sin(wavePhase);
-        dot.position.copy(baseRef.current).addScaledVector(normalRef.current, amp);
-        dot.visible = true;
-      }
-    } else {
-      waveDotsRef.current.forEach((dot) => {
-        if (dot) dot.visible = false;
-      });
     }
   });
 
   return (
-    <group
-      ref={(node) => {
-        signalGroupRef.current = node as unknown as GroupLikeObject | null;
-      }}
-    >
-      {halo ? (
-        <Line
-          points={INITIAL_LINE_POINTS}
-          color={signalColor}
-          toneMapped={false}
-          transparent
-          opacity={0.3}
-          lineWidth={3.8}
-          depthTest={depthOcclude}
-          depthWrite={false}
-        />
-      ) : null}
+    <group>
       <Line
         ref={(node) => {
           rfLineRef.current = node as unknown as LineLikeObject | null;
@@ -1057,7 +888,7 @@ function SignalLine({
         toneMapped={false}
         transparent
         opacity={0}
-        lineWidth={solid || orbitStyle ? 0 : rfLineWidth}
+        lineWidth={orbitStyle ? 0 : rfLineWidth}
         depthTest={depthOcclude}
         depthWrite={false}
       />
@@ -1069,42 +900,11 @@ function SignalLine({
         color={signalColor}
         toneMapped={false}
         transparent
-        opacity={orbitStyle ? 0.22 : solid ? 1 : signalOpacity}
-        lineWidth={orbitStyle ? orbitLineWidth : solid ? 2.45 : signalLineWidth}
+        opacity={orbitStyle ? 0.22 : signalOpacity}
+        lineWidth={orbitStyle ? orbitLineWidth : signalLineWidth}
         depthTest={depthOcclude}
         depthWrite={false}
       />
-      <mesh ref={pulseRef} raycast={() => null}>
-        <sphereGeometry args={[0.0052, 10, 10]} />
-        <meshBasicMaterial
-          color={signalColor}
-          toneMapped={false}
-          transparent
-          opacity={0.9}
-          depthWrite={false}
-          depthTest={false}
-        />
-      </mesh>
-      {Array.from({ length: 5 }).map((_, i) => (
-        <mesh
-          key={`wave-dot-${i}`}
-          ref={(node) => {
-            waveDotsRef.current[i] = node;
-          }}
-          visible={false}
-          raycast={() => null}
-        >
-          <sphereGeometry args={[0.0028, 8, 8]} />
-          <meshBasicMaterial
-            color={signalColor}
-            toneMapped={false}
-            transparent
-            opacity={0.72}
-            depthWrite={false}
-            depthTest={false}
-          />
-        </mesh>
-      ))}
     </group>
   );
 }
@@ -1592,15 +1392,13 @@ export function OrbitalSatellites({
             phase={spec.phase + anchorIndex * 0.17}
             signalColor={signalColor}
             reducedMotion={reducedMotion}
-            alwaysVisible
-            straight
             depthOcclude
-          microwaveStyle
-          signalOpacity={0.34}
-          signalLineWidth={0.95}
-          rfOpacity={0.58}
-          rfLineWidth={0.95}
-          linkKey={`${spec.id}-${anchorKey}-node-link`}
+            microwaveStyle
+            signalOpacity={0.34}
+            signalLineWidth={0.95}
+            rfOpacity={0.58}
+            rfLineWidth={0.95}
+            linkKey={`${spec.id}-${anchorKey}-node-link`}
             activeLinkKeysRef={activeNodeLinkKeysRef}
             activeNoiseLinkKeysRef={activePathNoiseLinkKeysRef}
             idleOpacity={0}
@@ -1618,8 +1416,6 @@ export function OrbitalSatellites({
           phase={pair.phase}
           signalColor={signalColor}
           reducedMotion={reducedMotion}
-          alwaysVisible
-          straight
           depthOcclude
           orbitStyle
           microwaveStyle

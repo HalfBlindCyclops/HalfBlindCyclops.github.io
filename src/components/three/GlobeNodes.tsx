@@ -4,6 +4,38 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Color, Mesh, QuadraticBezierCurve3, Quaternion, Vector3 } from "three";
 import { Line, useCursor } from "@react-three/drei";
 import { useFrame, type ThreeEvent } from "@react-three/fiber";
+
+/** Shared drag-vs-click disambiguation for Three pointer events. */
+function usePointerDrag(onClick: () => void) {
+  const pointerStartRef = useRef<{ x: number; y: number } | null>(null);
+  const draggingRef = useRef(false);
+
+  const handlePointerDown = useCallback((event: ThreeEvent<PointerEvent>) => {
+    event.stopPropagation();
+    pointerStartRef.current = { x: event.clientX, y: event.clientY };
+    draggingRef.current = false;
+  }, []);
+
+  const handlePointerMove = useCallback((event: ThreeEvent<PointerEvent>) => {
+    if (!pointerStartRef.current) return;
+    const dx = event.clientX - pointerStartRef.current.x;
+    const dy = event.clientY - pointerStartRef.current.y;
+    if (dx * dx + dy * dy > 25) draggingRef.current = true;
+  }, []);
+
+  const handlePointerUp = useCallback(
+    (event: ThreeEvent<PointerEvent>) => {
+      event.stopPropagation();
+      const wasDragging = draggingRef.current;
+      pointerStartRef.current = null;
+      draggingRef.current = false;
+      if (!wasDragging) onClick();
+    },
+    [onClick],
+  );
+
+  return { handlePointerDown, handlePointerMove, handlePointerUp };
+}
 import type { Line2 } from "three-stdlib";
 import { experienceMiniNodes } from "@/data/experienceMiniNodes";
 import { projectMiniNodes } from "@/data/projectMiniNodes";
@@ -138,8 +170,7 @@ function NodeMarker({
   onHoverIntent: (id: string | null) => void;
 }) {
   const [hovered, setHovered] = useState(false);
-  const pointerStartRef = useRef<{ x: number; y: number } | null>(null);
-  const draggingRef = useRef(false);
+  const { handlePointerDown, handlePointerMove, handlePointerUp } = usePointerDrag(onClick);
   const point = useMemo(
     () => latLonToVector3(node.latitude, node.longitude, 1.03),
     [node.latitude, node.longitude],
@@ -161,31 +192,6 @@ function NodeMarker({
     const up = new Vector3(0, 1, 0);
     return new Quaternion().setFromUnitVectors(up, outward);
   }, [outward]);
-
-  const handlePointerDown = (event: ThreeEvent<PointerEvent>) => {
-    event.stopPropagation();
-    pointerStartRef.current = { x: event.clientX, y: event.clientY };
-    draggingRef.current = false;
-  };
-
-  const handlePointerMove = (event: ThreeEvent<PointerEvent>) => {
-    if (!pointerStartRef.current) return;
-    const dx = event.clientX - pointerStartRef.current.x;
-    const dy = event.clientY - pointerStartRef.current.y;
-    if (dx * dx + dy * dy > 25) {
-      draggingRef.current = true;
-    }
-  };
-
-  const handlePointerUp = (event: ThreeEvent<PointerEvent>) => {
-    event.stopPropagation();
-    const wasDragging = draggingRef.current;
-    pointerStartRef.current = null;
-    draggingRef.current = false;
-    if (!wasDragging) {
-      onClick();
-    }
-  };
 
   useEffect(() => {
     if (hovered) {
@@ -338,12 +344,11 @@ function MiniNodeMarker({
   onHoverIntent: (id: string | null) => void;
 }) {
   const [hovered, setHovered] = useState(false);
+  const { handlePointerDown, handlePointerMove, handlePointerUp } = usePointerDrag(onClick);
   const point = useMemo(() => latLonToVector3(latitude, longitude, 1.02), [latitude, longitude]);
   const normal = useMemo(() => point.clone().normalize(), [point]);
   const markerPos = useMemo(() => point.clone().addScaledVector(normal, 0.0135), [normal, point]);
   const ringRef = useRef<Mesh>(null);
-  const pointerStartRef = useRef<{ x: number; y: number } | null>(null);
-  const draggingRef = useRef(false);
 
   const activeOrHovered = isActive || hovered;
 
@@ -366,27 +371,6 @@ function MiniNodeMarker({
     const pulse = 1 + Math.sin(clock.elapsedTime * 2.8) * 0.08;
     ring.scale.setScalar(pulse * (activeOrHovered ? 1.1 : 1));
   });
-
-  const handlePointerDown = (event: ThreeEvent<PointerEvent>) => {
-    event.stopPropagation();
-    pointerStartRef.current = { x: event.clientX, y: event.clientY };
-    draggingRef.current = false;
-  };
-
-  const handlePointerMove = (event: ThreeEvent<PointerEvent>) => {
-    if (!pointerStartRef.current) return;
-    const dx = event.clientX - pointerStartRef.current.x;
-    const dy = event.clientY - pointerStartRef.current.y;
-    if (dx * dx + dy * dy > 25) draggingRef.current = true;
-  };
-
-  const handlePointerUp = (event: ThreeEvent<PointerEvent>) => {
-    event.stopPropagation();
-    const wasDragging = draggingRef.current;
-    pointerStartRef.current = null;
-    draggingRef.current = false;
-    if (!wasDragging) onClick();
-  };
 
   return (
     <group position={markerPos}>
