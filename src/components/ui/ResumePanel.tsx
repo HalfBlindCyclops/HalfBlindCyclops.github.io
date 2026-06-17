@@ -791,10 +791,10 @@ export function ResumePanel({
                 {onGoToNext ? (
                   <button
                     type="button"
-                    onClick={onGoToNext}
+                    onClick={nextIsRestart ? onClose : onGoToNext}
                     aria-label={
                       nextIsRestart
-                        ? `Back to start${nextSectionTitle ? `: ${nextSectionTitle}` : ""}`
+                        ? "Close section"
                         : nextSectionTitle
                           ? `Go to next section: ${nextSectionTitle}`
                           : "Go to next section"
@@ -806,13 +806,13 @@ export function ResumePanel({
                       color: "rgb(236, 254, 255)",
                     }}
                   >
-                    {nextIsRestart ? "Back to start" : "Next"}
+                    {nextIsRestart ? "Close" : "Next"}
                     <span
                       aria-hidden
                       className="text-base leading-none md:text-lg"
                       style={{ color: colorToRgba(ACCENT_COLOR_HEX, 0.9) }}
                     >
-                      {nextIsRestart ? "↺" : "→"}
+                      {nextIsRestart ? "×" : "→"}
                     </span>
                   </button>
                 ) : null}

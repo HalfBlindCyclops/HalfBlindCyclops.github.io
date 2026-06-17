@@ -33,6 +33,15 @@ export type ProjectMiniNodeProfile = {
  */
 export const projectMiniNodes: ProjectMiniNode[] = [
   {
+    id: "webdev-portfolio-globe",
+    title: "Portfolio Globe (This Site)",
+    subsection: "webDev",
+    subsectionIndex: 3,
+    // Jambi, Sumatra, Indonesia
+    latitude: -1.6101,
+    longitude: 103.6131,
+  },
+  {
     id: "systems-orbit",
     title: "Spacecraft Simulation Engine",
     subsection: "systems",
@@ -112,15 +121,6 @@ export const projectMiniNodes: ProjectMiniNode[] = [
     // Bandar Lampung, South Sumatra, Indonesia
     latitude: -5.45,
     longitude: 105.2667,
-  },
-  {
-    id: "webdev-portfolio-globe",
-    title: "Portfolio Globe (This Site)",
-    subsection: "webDev",
-    subsectionIndex: 3,
-    // Jambi, Sumatra, Indonesia
-    latitude: -1.6101,
-    longitude: 103.6131,
   },
 ];
 
