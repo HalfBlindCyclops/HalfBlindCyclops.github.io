@@ -1121,10 +1121,9 @@ export function OrbitalSatellites({
     [satelliteLinks],
   );
   const accent = useMemo(() => new Color().setStyle(accentColor), [accentColor]);
-  // Comms lines (sat-to-ground + inter-sat links) stay blue; orbit tracks go green
-  // so the two are easy to tell apart.
+  // Comms lines (sat-to-ground + inter-sat links) and orbit tracks share the same blue.
   const signalColor = useMemo(() => new Color("#38bdf8"), []);
-  const orbitTrackColor = useMemo(() => new Color("#34d399"), []);
+  const orbitTrackColor = useMemo(() => new Color("#38bdf8"), []);
   const inactiveOrbitTrackColor = useMemo(() => orbitTrackColor.clone(), [orbitTrackColor]);
   const lowQualityTier = useMemo(() => {
     if (reducedMotion || isMobile) return true;
@@ -1624,7 +1623,7 @@ export function OrbitalSatellites({
           depthOcclude
           orbitStyle
           microwaveStyle
-          orbitLineWidth={2.1}
+          orbitLineWidth={1.35}
           signalOpacity={0.26}
           rfOpacity={0.85}
           linkKey={pair.id}
