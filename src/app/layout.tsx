@@ -26,6 +26,17 @@ export const metadata: Metadata = {
   title: "Sean Wetherell | Interactive Globe Resume",
   description:
     "A cinematic 3D resume experience powered by Next.js, React Three Fiber, and Framer Motion.",
+  icons: {
+    icon: [
+      { url: "/favicon.ico" },
+      { url: "/favicon-16x16.png", sizes: "16x16", type: "image/png" },
+      { url: "/favicon-32x32.png", sizes: "32x32", type: "image/png" },
+    ],
+    apple: [
+      { url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
+    ],
+  },
+  manifest: "/site.webmanifest",
 };
 
 /** Explicit viewport avoids mobile browsers using a default ~980px layout; keeps CSS px aligned with `matchMedia` breakpoints. */
