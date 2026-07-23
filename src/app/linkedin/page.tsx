@@ -102,18 +102,16 @@ export default function LinkedInGatewayPage() {
             href={LINKEDIN_PROFILE_URL}
             target="_blank"
             rel="noreferrer noopener"
-            className="inline-flex h-12 items-center justify-center rounded-xl border px-4 text-sm font-semibold tracking-wide text-slate-950 transition hover:brightness-110"
+            className="inline-flex h-12 items-center justify-center rounded-xl border border-[#004182] bg-[#0A66C2] px-4 text-sm font-semibold tracking-wide text-white transition hover:bg-[#004182]"
             style={{
-              backgroundColor: ACCENT_COLOR_HEX,
-              borderColor: accentBorder,
-              boxShadow: `0 0 24px ${colorToRgba(ACCENT_COLOR_HEX, 0.28)}`,
+              boxShadow: "0 0 20px rgba(10, 102, 194, 0.35)",
             }}
           >
             Go to LinkedIn
           </a>
           <Link
             href="/"
-            className="inline-flex h-12 items-center justify-center rounded-xl border border-white/15 bg-white/5 px-4 text-sm font-semibold tracking-wide text-slate-100 transition hover:border-white/25 hover:bg-white/10"
+            className="inline-flex h-12 items-center justify-center rounded-xl border-2 border-white/40 bg-white/5 px-4 text-sm font-semibold tracking-wide text-slate-100 transition hover:border-white/55 hover:bg-white/10"
           >
             Stay and explore here
           </Link>
