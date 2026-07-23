@@ -1,4 +1,5 @@
 import { publicPath } from "@/lib/basePath";
+import { LINKEDIN_PROFILE_URL } from "@/data/profileHub";
 
 /** Projects panel only: grouped bullets by area. */
 export type ResumeProjectSubsections = {
@@ -43,8 +44,9 @@ export const resumeNodes: ResumeNode[] = [
       "Outside the keyboard: orbital mechanics, aerospace, and aviation. Northeastern Club Wrestling; former four-year Norwood High varsity wrestler.",
     ],
     links: [
-      { label: "Email", href: "mailto:Wetherell.S@Northeastern.edu" },
+      { label: "Email", href: "mailto:seanwwetherell@gmail.com" },
       { label: "Phone", href: "tel:+17818001653" },
+      { label: "LinkedIn", href: LINKEDIN_PROFILE_URL },
       { label: "University", href: "https://www.northeastern.edu/" },
       { label: "Resume PDF", href: publicPath("/sean-wetherell-resume.pdf") },
     ],

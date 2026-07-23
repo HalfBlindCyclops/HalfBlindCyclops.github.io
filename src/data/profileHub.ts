@@ -31,7 +31,9 @@ export const PROFILE_TAGLINE = "CS @ Northeastern University · Boston, MA";
 /** Served from `/public/headshot.webp`. */
 export const PROFILE_IMAGE_SRC: string | null = publicPath("/headshot.webp");
 
-/** Order: Northeastern, degree, Boston, then PDF, phone, email (interactive). */
+export const LINKEDIN_PROFILE_URL = "https://www.linkedin.com/in/sean-wetherell/";
+
+/** Order: Northeastern, degree, Boston, then PDF, phone, email, LinkedIn (interactive). */
 export const profileHubRows: ProfileHubRow[] = [
   {
     id: "university",
@@ -74,7 +76,15 @@ export const profileHubRows: ProfileHubRow[] = [
     variant: "interactive",
     listLabel: "Email",
     icon: "mail",
-    copyValue: "Wetherell.S@Northeastern.edu",
-    mailtoHref: "mailto:Wetherell.S@Northeastern.edu",
+    copyValue: "seanwwetherell@gmail.com",
+    mailtoHref: "mailto:seanwwetherell@gmail.com",
+  },
+  {
+    id: "linkedin",
+    variant: "interactive",
+    listLabel: "LinkedIn",
+    icon: "link",
+    copyValue: LINKEDIN_PROFILE_URL,
+    openHref: LINKEDIN_PROFILE_URL,
   },
 ];

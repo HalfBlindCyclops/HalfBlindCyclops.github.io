@@ -205,6 +205,38 @@ function InteractiveRow({
           </button>
         </>
       ) : null}
+      {contact.id !== "resume" && hasOpen && !hasMailto && !hasTel ? (
+        <>
+          <a
+            href={contact.openHref}
+            target="_blank"
+            rel="noreferrer noopener"
+            className={buttonClass}
+            title={`Open ${contact.listLabel}`}
+            aria-label={`Open ${contact.listLabel}`}
+          >
+            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.9">
+              <path d="M14 4h6v6" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M10 14L20 4" strokeLinecap="round" />
+              <path d="M20 14v6h-16v-16h6" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </a>
+          <button
+            type="button"
+            onClick={() => void copy()}
+            className={buttonClass}
+            title={copiedAction === `${contact.id}-copy` ? "Copied" : `Copy ${contact.listLabel}`}
+            aria-label={
+              copiedAction === `${contact.id}-copy` ? `${contact.listLabel} copied` : `Copy ${contact.listLabel}`
+            }
+          >
+            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.9">
+              <rect x="9" y="9" width="11" height="11" rx="2" />
+              <rect x="4" y="4" width="11" height="11" rx="2" />
+            </svg>
+          </button>
+        </>
+      ) : null}
       {!hasMailto && !hasTel && !hasOpen ? (
         <button
           type="button"
