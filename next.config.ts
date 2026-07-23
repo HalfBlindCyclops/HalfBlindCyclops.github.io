@@ -15,6 +15,9 @@ function basePathFromEnv(): string | undefined {
  */
 const nextConfig: NextConfig = {
   output: "export",
+  // GitHub Pages serves `/path/` from `path/index.html`; without this, Next emits `path.html`
+  // and only `/path` (no trailing slash) works.
+  trailingSlash: true,
   images: { unoptimized: true },
   experimental: {
     webVitalsAttribution: ["LCP", "INP", "CLS"],
